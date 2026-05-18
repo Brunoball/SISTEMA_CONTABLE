@@ -363,8 +363,10 @@ function normalizePlanNivel(value) {
   return 3;
 }
 
-function normalizePlanId(value) {
+function normalizePlanId(value, planName = "") {
   const n = Number(value);
+  const name = String(planName || "").trim().toLowerCase();
+  if (n === 3 || name.includes("demo")) return 3;
   return n === 2 ? 2 : 1;
 }
 
@@ -380,8 +382,8 @@ const PLAN_BASICO_NAV_KEYS = new Set([
 function planAllowsNavKey(planId, key) {
   const id = normalizePlanId(planId);
 
-  // Plan 2 = PRO: todo habilitado.
-  if (id === 2) return true;
+  // Plan 2 = PRO y Plan 3 = DEMO: todo visible en navegación.
+  if (id === 2 || id === 3) return true;
 
   // Plan 1 = BÁSICO: solo módulos principales.
   return PLAN_BASICO_NAV_KEYS.has(String(key || ""));
@@ -792,8 +794,12 @@ const Principal = () => {
 
       if (u) {
         u.rol = normalizeRol(u.rol);
-        u.idPlan = normalizePlanId(u.idPlan ?? u.id_plan ?? u.plan_id ?? u.plan_nivel ?? 1);
+        u.idPlan = normalizePlanId(
+          u.idPlan ?? u.id_plan ?? u.plan_id ?? u.plan_nivel ?? 1,
+          u.plan_nombre ?? u.plan ?? u.nombre_plan ?? ""
+        );
         u.plan_nivel = normalizePlanNivel(u.plan_nivel ?? u.idPlan ?? 1);
+        if (u.idPlan === 3) u.plan_nivel = 3;
         u.tema = normalizeTema(u.tema ?? "claro");
       }
 
@@ -928,7 +934,8 @@ const Principal = () => {
   );
 
   const planIdUsuario = normalizePlanId(
-    usuario?.idPlan ?? usuario?.id_plan ?? usuario?.plan_id ?? usuario?.plan_nivel ?? 1
+    usuario?.idPlan ?? usuario?.id_plan ?? usuario?.plan_id ?? usuario?.plan_nivel ?? 1,
+    usuario?.plan_nombre ?? usuario?.plan ?? usuario?.nombre_plan ?? ""
   );
 
   const puedeVerConfiguracion = rolUsuario === "admin";

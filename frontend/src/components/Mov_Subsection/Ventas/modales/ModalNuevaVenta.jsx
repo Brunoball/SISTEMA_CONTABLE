@@ -16,6 +16,7 @@ import {
   preloadVentaNoFacturadaPdfAssets,
 } from "../../../../utils/VentaNoFacturadaPdfBuilder";
 import { saveRemitoPdf } from "../../../../utils/RemitoPdfBuilder";
+import { DEMO_BLOCK_MESSAGE, isBaltoDemoMode } from "../../../../utils/demoMode";
 
 /* ================================================================
    CONSTANTS
@@ -3076,6 +3077,11 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   ]);
 
   const onClickFacturar = useCallback(async () => {
+    if (isBaltoDemoMode()) {
+      showToast("advertencia", DEMO_BLOCK_MESSAGE, 5200);
+      return;
+    }
+
     setAccionContado("facturar");
     setFiscalError("");
 

@@ -4,6 +4,7 @@ import BASE_URL from "../../../../config/config.jsx";
 import ModalFacturaBaltoResumen from "../../Facturacion/ModalFacturaBaltoResumen.jsx";
 import { saveNotaCreditoPdf } from "../../../../utils/NotaCreditoPdfBuilder.js";
 import "../../../Global/Global_css/roots.css";
+import { DEMO_BLOCK_MESSAGE, isBaltoDemoMode } from "../../../../utils/demoMode";
 
 function todayISO() {
   const d = new Date();
@@ -578,7 +579,13 @@ useEffect(() => {
             <button
               type="button"
               className="mit-btn mit-btn--solid"
-              onClick={() => setOpenResumen(true)}
+              onClick={() => {
+                if (isBaltoDemoMode()) {
+                  showToast("advertencia", DEMO_BLOCK_MESSAGE, 5200);
+                  return;
+                }
+                setOpenResumen(true);
+              }}
               disabled={loading || !contexto}
             >
               {loading ? "Procesando…" : "Continuar emisión"}

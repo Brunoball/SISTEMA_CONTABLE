@@ -16,6 +16,7 @@ import ModalFacturaBaltoResumen from "../../Facturacion/ModalFacturaBaltoResumen
 import { PanelMediosPagoInlineVenta } from "../../Ventas/modales/ModalNuevaVenta.jsx";
 import { saveVentaNoFacturadaPdf } from "../../../../utils/VentaNoFacturadaPdfBuilder";
 import { saveRemitoPdf } from "../../../../utils/RemitoPdfBuilder";
+import { DEMO_BLOCK_MESSAGE, isBaltoDemoMode } from "../../../../utils/demoMode";
 
 const NULL_OPTION = "";
 const API = `${BASE_URL}/api.php`;
@@ -1341,6 +1342,11 @@ export default function ModalAsignarPresupuestoVenta({
   }, [validate, showToast, fetchConfigFacturacion, fiscalPdfParaInterno, guardarConversion, buildComprobantePayload, subirPdfDocumento, subirArchivosChequesCreados, afterSaved]);
 
   const abrirFacturacion = useCallback(async () => {
+    if (isBaltoDemoMode()) {
+      showToast("advertencia", DEMO_BLOCK_MESSAGE, 5200);
+      return;
+    }
+
     const error = validate("facturar");
     if (error) return showToast("advertencia", error, 5200);
 

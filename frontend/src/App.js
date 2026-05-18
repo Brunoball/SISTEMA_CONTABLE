@@ -136,14 +136,86 @@ function isAdminUser() {
   return normalizeRol(u?.rol ?? u?.tipo_rol, u?.id_rol) === "admin";
 }
 
-function normalizePlanId(value) {
+function normalizePlanText(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function normalizePlanId(value, planName = "") {
   const n = Number(value);
-  return n === 2 ? 2 : 1;
+  const nombre = normalizePlanText(planName);
+
+  if (n === 3 || nombre.includes("demo")) return 3;
+  if (
+    n === 2 ||
+    nombre.includes("pro") ||
+    nombre.includes("avanzado") ||
+    nombre.includes("advanced")
+  ) {
+    return 2;
+  }
+
+  return 1;
+}
+
+function isTruthyDemoFlag(value) {
+  if (value === true) return true;
+  if (value === false || value === null || value === undefined) return false;
+  const v = normalizePlanText(value);
+  return ["1", "true", "si", "sí", "yes", "demo"].includes(v);
 }
 
 function getPlanIdUsuario() {
   const u = getUsuarioLogueado();
-  return normalizePlanId(u?.idPlan ?? u?.id_plan ?? u?.plan_id ?? u?.plan_nivel ?? 1);
+  if (!u) return 1;
+
+  const nombres = [
+    u.plan_nombre,
+    u.nombre_plan,
+    u.plan,
+    u.tipo_plan,
+    u.planName,
+    u.nombrePlan,
+  ].map(normalizePlanText);
+
+  const numeros = [
+    u.idPlan,
+    u.id_plan,
+    u.plan_id,
+    u.planId,
+    u.plan_nivel,
+    u.nivel,
+    u.nivel_plan,
+    u.tenant_idPlan,
+    u.tenant_id_plan,
+  ]
+    .map((x) => Number(x))
+    .filter((x) => Number.isFinite(x));
+
+  if (
+    isTruthyDemoFlag(u.es_demo) ||
+    isTruthyDemoFlag(u.demo) ||
+    isTruthyDemoFlag(u.is_demo) ||
+    isTruthyDemoFlag(u.modo_demo) ||
+    numeros.includes(3) ||
+    nombres.some((n) => n.includes("demo"))
+  ) {
+    return 3;
+  }
+
+  if (
+    numeros.includes(2) ||
+    nombres.some(
+      (n) => n.includes("pro") || n.includes("avanzado") || n.includes("advanced")
+    )
+  ) {
+    return 2;
+  }
+
+  return 1;
 }
 
 const PLAN_BASICO_MODULES = new Set([
@@ -158,8 +230,9 @@ const PLAN_BASICO_MODULES = new Set([
 function planAllowsModule(modulo) {
   const planId = getPlanIdUsuario();
 
-  // Plan 2 = PRO: acceso completo a todos los módulos.
-  if (planId === 2) return true;
+  // Plan 2 = PRO y Plan 3 = DEMO: acceso visual completo a módulos.
+  // Las restricciones reales del demo se aplican en botones sensibles y en backend.
+  if (planId === 2 || planId === 3) return true;
 
   // Plan 1 = BÁSICO: solo módulos principales habilitados.
   return PLAN_BASICO_MODULES.has(String(modulo || ""));

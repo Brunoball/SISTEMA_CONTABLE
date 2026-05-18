@@ -2,6 +2,7 @@ import React, { useMemo, useState, useCallback, useEffect, useRef } from "react"
 import { FaCheck } from "react-icons/fa";
 import "./ModalFacturaBalto.css";
 import "../../Global/Global_css/Global_oscuro.css";
+import { DEMO_BLOCK_MESSAGE, isBaltoDemoMode } from "../../../utils/demoMode";
 
 import { buildBaltoInvoicePdf, saveBaltoInvoicePdf } from "../../../utils/FacturaPdfBuilder";
 import { buildNotaCreditoPdf, saveNotaCreditoPdf } from "../../../utils/NotaCreditoPdfBuilder";
@@ -886,6 +887,10 @@ useEffect(() => {
 
   const emitir = useCallback(async () => {
     setError("");
+    if (isBaltoDemoMode()) {
+      setError(DEMO_BLOCK_MESSAGE);
+      return;
+    }
     const v = validar();
     if (!v.ok) return setError(v.msg);
     if (!confirm) return setError("Tenés que confirmar antes de emitir.");

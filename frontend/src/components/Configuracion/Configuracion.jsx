@@ -16,6 +16,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 
 import { useDateRange } from "../../context/DateRangeContext";
+import { DEMO_BLOCK_MESSAGE, isBaltoDemoMode, normalizeBaltoPlanId } from "../../utils/demoMode";
 
 const API_RELATIVE = "api.php";
 
@@ -54,9 +55,8 @@ function getUsuario() {
   }
 }
 
-function normalizePlanId(value) {
-  const n = Number(value);
-  return n === 2 ? 2 : 1;
+function normalizePlanId(value, planName = "") {
+  return normalizeBaltoPlanId(value, planName);
 }
 
 async function apiFetch(paramsObj = {}, options = {}) {
@@ -128,9 +128,12 @@ export default function Configuracion() {
     "";
 
   const planIdUsuario = normalizePlanId(
-    usuario?.idPlan ?? usuario?.id_plan ?? usuario?.plan_id ?? usuario?.plan_nivel ?? 1
+    usuario?.idPlan ?? usuario?.id_plan ?? usuario?.plan_id ?? usuario?.plan_nivel ?? 1,
+    usuario?.plan_nombre ?? usuario?.plan ?? usuario?.nombre_plan ?? ""
   );
   const esPlanBasico = planIdUsuario === 1;
+  const esPlanDemo = isBaltoDemoMode(usuario);
+  const [demoNotice, setDemoNotice] = useState("");
 
   // ── estado Tienda Nube ─────────────────────────────────────────────────
   const [tiendanube, setTiendanube] = useState({
@@ -207,7 +210,9 @@ export default function Configuracion() {
       description:
         "Conectá tu tienda y configurá la sincronización con una interfaz simple.",
       route: "/panel/configuracion/tiendanube",
-      status: tiendaNubeEstado,
+      demoBlocked: esPlanDemo,
+      demoMessage: "Modo demo: Tienda Nube se muestra para que el cliente vea la opción, pero no se puede configurar ni conectar desde una cuenta demo.",
+      status: esPlanDemo ? { text: "Bloqueado demo", type: "warning" } : tiendaNubeEstado,
       metaTop: tiendanube.connected ? "Conexión activa" : "Sin conexión",
       metaBottom: tiendanube.store_id
         ? `Store ID: ${tiendanube.store_id}`
@@ -243,7 +248,9 @@ export default function Configuracion() {
         description:
           "Actualizá razón social, CUIT, condición fiscal, domicilio y datos de facturación.",
         route: "/panel/configuracion/datos-legales",
-        status: datosLegales.razon_social ? { text: "Configurado", type: "success" } : { text: "Pendiente", type: "pending" },
+        demoBlocked: esPlanDemo,
+        demoMessage: "Modo demo: los datos legales se ven como opción, pero no se pueden editar ni abrir para evitar cambios fiscales reales.",
+        status: esPlanDemo ? { text: "Bloqueado demo", type: "warning" } : (datosLegales.razon_social ? { text: "Configurado", type: "success" } : { text: "Pendiente", type: "pending" }),
         metaTop: datosLegales.razon_social || "Sin razón social",
         metaBottom: datosLegales.cuit ? `CUIT: ${datosLegales.cuit}` : "CUIT sin cargar",
         icon: (
@@ -264,18 +271,36 @@ export default function Configuracion() {
         icon: <CalendarioIcon />,
       },
     ];
-  }, [tiendanube, datosLegales, calendarConfig, configLoaded, esPlanBasico]);
+  }, [tiendanube, datosLegales, calendarConfig, configLoaded, esPlanBasico, esPlanDemo]);
 
   return (
     <section className="cfg-page">
       <div className="cfg-contentScroll">
+        {esPlanDemo && (
+          <div className="cfg-demoNotice" role="status">
+            Estás en modo demo. Las cajas de Tienda Nube y Datos legales se muestran para presentación, pero no se pueden abrir ni configurar.
+          </div>
+        )}
+        {demoNotice && (
+          <div className="cfg-demoNotice cfg-demoNotice--warning" role="alert">
+            {demoNotice}
+          </div>
+        )}
         <div className="cfg-cards">
         {cards.map((card) => (
           <div key={card.id} className="cfg-cardWrap">
             <button
               type="button"
-              className="cfg-card"
-              onClick={() => navigate(card.route)}
+              className={`cfg-card ${card.demoBlocked ? "is-demo-locked" : ""}`}
+              aria-disabled={card.demoBlocked ? "true" : undefined}
+              title={card.demoBlocked ? "Bloqueado en modo demo" : undefined}
+              onClick={() => {
+                if (card.demoBlocked) {
+                  setDemoNotice(card.demoMessage || DEMO_BLOCK_MESSAGE);
+                  return;
+                }
+                navigate(card.route);
+              }}
             >
               <div className="cfg-cardMain">
                 <CardVisual>{card.icon}</CardVisual>

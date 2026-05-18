@@ -20,6 +20,7 @@ import { saveRemitoPdf } from "../../../../utils/RemitoPdfBuilder";
 const NULL_OPTION = "";
 const API = `${BASE_URL}/api.php`;
 const API_PRESUPUESTO_GET = `${API}?action=presupuestos_obtener`;
+const API_VENTA_GET = `${API}?action=ventas_obtener`;
 const API_CONVERTIR = `${API}?action=presupuestos_convertir_venta`;
 const API_CONFIG_FACTURACION = `${API}?action=config_facturacion_get`;
 const API_CLIENTE_FISCAL_GET = `${API}?action=cliente_fiscal_get`;
@@ -413,10 +414,325 @@ function buildEmptyMedioPago(montoInicial = 0) {
   };
 }
 
+
+function getVentaGeneradaId(source) {
+  const s = source && typeof source === "object" ? source : {};
+  const candidates = [
+    s.id_venta_generada,
+    s.id_movimiento_venta,
+    s.id_venta,
+    s.venta_id,
+    s.id_movimiento_generado,
+    s.id_movimiento_destino,
+    s.id_destino,
+    s.venta_generada?.id_movimiento,
+    s.venta_generada?.id_venta,
+    s.venta?.id_movimiento,
+    s.venta?.id_venta,
+    s.movimiento_venta?.id_movimiento,
+    s.movimiento_venta?.id_venta,
+  ];
+
+  for (const value of candidates) {
+    const n = Number(value);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
+
+function getFirstArray(...values) {
+  for (const value of values) {
+    if (Array.isArray(value) && value.length) return value;
+  }
+  return [];
+}
+
+function getTipoVentaNombreFromSource(source) {
+  const s = source && typeof source === "object" ? source : {};
+  return safeStr(
+    s.tipo_venta_nombre ||
+      s.nombre_tipo_venta ||
+      s.tipo_pago_nombre ||
+      s.forma_pago_nombre ||
+      s.tipo_venta ||
+      s.tipo_pago ||
+      s.forma_pago ||
+      s.condicion_venta ||
+      s.condicion_pago ||
+      s.tipoVenta?.nombre ||
+      s.tipoVenta?.descripcion ||
+      ""
+  );
+}
+
+function resolveTipoVentaIdFromVenta(venta, tiposVentaList) {
+  const v = venta && typeof venta === "object" ? venta : {};
+  const explicit = Number(v.id_tipo_venta ?? v.tipo_venta_id ?? v.idTipoVenta ?? v.id_tipo_pago ?? 0);
+  if (Number.isFinite(explicit) && explicit > 0) return String(explicit);
+
+  const nombre = normalizeText(getTipoVentaNombreFromSource(v));
+  if (!nombre) return "";
+
+  const found = (Array.isArray(tiposVentaList) ? tiposVentaList : []).find((t) => {
+    const txt = normalizeText(t?.nombre || t?.descripcion || t?.detalle || t?.label || "");
+    return txt && (txt === nombre || txt.includes(nombre) || nombre.includes(txt));
+  });
+
+  const id = found ? getTipoVentaId(found) : null;
+  return id ? String(id) : "__tipo_convertido__";
+}
+
+function resolveMedioPagoIdFromSource(mp, mediosPagoList) {
+  const source = mp && typeof mp === "object" ? mp : {};
+  const explicit = Number(source.id_medio_pago ?? source.medio_pago_id ?? source.idMedioPago ?? source.id ?? source.value ?? 0);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+
+  const nombre = normalizeText(
+    source.medio_pago_nombre ||
+      source.nombre_medio ||
+      source.nombre ||
+      source.medio_pago ||
+      source.descripcion ||
+      source.detalle ||
+      source.label ||
+      ""
+  );
+  if (!nombre) return null;
+
+  const found = (Array.isArray(mediosPagoList) ? mediosPagoList : []).find((m) => {
+    const txt = normalizeText(m?.nombre || m?.descripcion || m?.detalle || m?.label || m?.medio_pago || "");
+    return txt && (txt === nombre || txt.includes(nombre) || nombre.includes(txt));
+  });
+
+  const id = found ? getMedioPagoId(found) : null;
+  return id || null;
+}
+
+function getMedioPagoNombreFromSource(mp, mediosPagoList) {
+  const source = mp && typeof mp === "object" ? mp : {};
+  const direct = safeStr(
+    source.medio_pago_nombre ||
+      source.nombre_medio ||
+      source.nombre ||
+      source.medio_pago ||
+      source.descripcion ||
+      source.detalle ||
+      source.label ||
+      ""
+  );
+  if (direct) return direct;
+
+  const id = resolveMedioPagoIdFromSource(source, mediosPagoList);
+  const found = (Array.isArray(mediosPagoList) ? mediosPagoList : []).find(
+    (m) => String(getMedioPagoId(m) ?? "") === String(id ?? "")
+  );
+  return getMedioPagoNombre(found);
+}
+
+function buildChequeFromMedioSource(mp, medioNombre, monto) {
+  const source = mp && typeof mp === "object" ? mp : {};
+  const chequeSource = source.cheque && typeof source.cheque === "object" ? source.cheque : source;
+  const tipoDetectado = normalizeChequeTipoFromMedio(
+    source.cheque_tipo ||
+      source.tipo_cheque ||
+      source.tipo ||
+      chequeSource.cheque_tipo ||
+      chequeSource.tipo_cheque ||
+      chequeSource.tipo ||
+      medioNombre
+  );
+
+  const idCheque = Number(source.id_cheque || chequeSource.id_cheque || 0) || null;
+  const numeroCheque = safeStr(
+    source.numero_cheque ||
+      source.nro_cheque ||
+      source.cheque_numero ||
+      source.numero ||
+      chequeSource.numero_cheque ||
+      chequeSource.nro_cheque ||
+      chequeSource.cheque_numero ||
+      chequeSource.numero ||
+      ""
+  );
+  const emisor = safeStr(source.emisor || source.librador || chequeSource.emisor || chequeSource.librador || "");
+  const fechaEmision = safeStr(source.fecha_emision || chequeSource.fecha_emision || "").slice(0, 10);
+  const fechaPago = safeStr(
+    source.fecha_pago || source.fecha_vencimiento || chequeSource.fecha_pago || chequeSource.fecha_vencimiento || ""
+  ).slice(0, 10);
+  const importe = safeNumber(
+    source.cheque_importe ??
+      chequeSource.cheque_importe ??
+      source.importe ??
+      chequeSource.importe ??
+      source.monto ??
+      monto
+  );
+  const observaciones = safeStr(
+    source.cheque_descripcion ||
+      source.descripcion_cheque ||
+      source.observaciones ||
+      source.descripcion ||
+      chequeSource.cheque_descripcion ||
+      chequeSource.descripcion_cheque ||
+      chequeSource.observaciones ||
+      chequeSource.descripcion ||
+      ""
+  );
+
+  const hasChequeData = idCheque || numeroCheque || emisor || fechaEmision || fechaPago || tipoDetectado;
+  if (!hasChequeData) return null;
+
+  return {
+    id_cheque: idCheque,
+    tipo: tipoDetectado || safeStr(source.cheque_tipo || source.tipo_cheque || chequeSource.tipo || "cheque"),
+    fecha_emision: fechaEmision,
+    emisor,
+    numero_cheque: numeroCheque,
+    importe: importe || safeNumber(source.monto ?? monto),
+    fecha_pago: fechaPago,
+    observaciones,
+    descripcion: observaciones,
+    cheque_descripcion: observaciones,
+    archivo_nombre: safeStr(source.archivo_nombre || chequeSource.archivo_nombre || source.nombre_archivo || ""),
+  };
+}
+
+function buildMediosFilasFromVenta(venta, mediosPagoList, totalFallback = 0) {
+  const v = venta && typeof venta === "object" ? venta : {};
+  const detalles = getFirstArray(
+    v.medios_pago_detalle,
+    v.medios_pago,
+    v.medios,
+    v.pagos,
+    v.detalle_medios_pago,
+    v.movimientos_medios_pago
+  );
+
+  const rows = detalles
+    .map((mp, idx) => {
+      const idMedio = resolveMedioPagoIdFromSource(mp, mediosPagoList);
+      if (!idMedio) return null;
+      const monto = safeNumber(mp?.monto ?? mp?.importe ?? mp?.total ?? mp?.monto_pagado ?? totalFallback);
+      const medioNombre = getMedioPagoNombreFromSource(mp, mediosPagoList);
+      return {
+        id: `convertido-mp-${mp?.id_movimiento_medio_pago || mp?.id_pago_medio || mp?.id || idx}`,
+        id_medio_pago: String(idMedio),
+        monto,
+        montoDraft: formatEditableMoney(monto),
+        montoFocused: false,
+        cheque: buildChequeFromMedioSource(mp, medioNombre, monto),
+      };
+    })
+    .filter(Boolean);
+
+  if (rows.length) return rows;
+
+  const legacyId = resolveMedioPagoIdFromSource(v, mediosPagoList);
+  if (legacyId) {
+    const monto = safeNumber(v.monto_pagado ?? v.importe_pagado ?? v.monto_total ?? v.total ?? totalFallback);
+    const medioNombre = getMedioPagoNombreFromSource(v, mediosPagoList);
+    return [
+      {
+        id: "convertido-mp-legacy",
+        id_medio_pago: String(legacyId),
+        monto,
+        montoDraft: formatEditableMoney(monto),
+        montoFocused: false,
+        cheque: buildChequeFromMedioSource(v, medioNombre, monto),
+      },
+    ];
+  }
+
+  return [];
+}
+
 function getChequeFileFromRows(rows, uid) {
   const row = (Array.isArray(rows) ? rows : []).find((r) => String(r.id) === String(uid));
   const file = row?.cheque?.archivo;
   return file instanceof File ? file : null;
+}
+
+
+function ReadOnlyMediosPagoVenta({ mediosFilas, mediosPagoList, totalCompra }) {
+  const rows = (Array.isArray(mediosFilas) ? mediosFilas : []).filter((mp) => mp?.id_medio_pago);
+  const asignado = rows.reduce((acc, mp) => {
+    const monto = mp?.cheque ? safeNumber(mp.cheque.importe ?? mp.monto) : safeNumber(mp.monto);
+    return acc + monto;
+  }, 0);
+
+  if (!rows.length) {
+    return (
+      <div className="nc-cc-info">
+        No se encontraron medios de pago vinculados a la venta generada.
+      </div>
+    );
+  }
+
+  return (
+    <div className="nc-mp-readonly-panel" style={{ display: "grid", gap: 10 }}>
+      <div style={{ fontSize: 12, fontWeight: 800, color: "#34495e", textTransform: "uppercase", letterSpacing: ".04em" }}>
+        Medio de pago asignado
+      </div>
+
+      {rows.map((mp, idx) => {
+        const found = mediosPagoList.find((m) => String(getMedioPagoId(m) ?? "") === String(mp.id_medio_pago ?? ""));
+        const medioNombre = safeText(getMedioPagoNombre(found));
+        const cheque = mp?.cheque || null;
+        const monto = cheque ? safeNumber(cheque.importe ?? mp.monto) : safeNumber(mp.monto);
+
+        return (
+          <div
+            key={mp.id || `readonly-mp-${idx}`}
+            style={{
+              border: "1px solid #dbe4ee",
+              borderRadius: 12,
+              background: "#fff",
+              padding: 12,
+              display: "grid",
+              gap: 8,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+              <b style={{ color: "#21384f" }}>{medioNombre}</b>
+              <b style={{ color: "#007f5f" }}>{moneyARS(monto)}</b>
+            </div>
+
+            {cheque ? (
+              <div
+                style={{
+                  border: "1px solid #cfe7e4",
+                  borderRadius: 12,
+                  background: "#f8fffd",
+                  padding: 12,
+                  display: "grid",
+                  gap: 6,
+                  fontSize: 13,
+                  color: "#2f4358",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+                  <b style={{ color: "#00796b" }}>
+                    {normalizeChequeTipoFromMedio(cheque?.tipo || medioNombre) === "echeq" ? "E-Cheq cargado" : "Cheque cargado"}
+                  </b>
+                  <FontAwesomeIcon icon={faCheckCircle} style={{ color: "#00856f" }} />
+                </div>
+                <div><b>N°:</b> {safeText(cheque.numero_cheque)}</div>
+                <div><b>Emisor:</b> {safeText(cheque.emisor)}</div>
+                <div><b>Emisión:</b> {formatFechaDMY(cheque.fecha_emision)}</div>
+                <div><b>Pago:</b> {formatFechaDMY(cheque.fecha_pago)}</div>
+                <div><b>Importe:</b> {moneyARS(monto)}</div>
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+
+      <div style={{ fontSize: 13, color: "#34495e" }}>
+        Asignado: <b>{moneyARS(asignado)}</b>{" "}
+        {asignado >= safeNumber(totalCompra) - 0.05 ? <b style={{ color: "#00856f" }}>✓ Cubierto</b> : null}
+      </div>
+    </div>
+  );
 }
 
 export default function ModalAsignarPresupuestoVenta({
@@ -481,10 +797,28 @@ export default function ModalAsignarPresupuestoVenta({
   const subtotal = useMemo(() => items.reduce((acc, it) => acc + safeNumber(it.subtotal), 0), [items]);
   const ivaTotal = useMemo(() => items.reduce((acc, it) => acc + safeNumber(it.iva_monto), 0), [items]);
 
-  const tipoVentaSelected = useMemo(
-    () => tiposVentaList.find((t) => String(getTipoVentaId(t) ?? "") === String(idTipoVenta)) || null,
-    [tiposVentaList, idTipoVenta]
-  );
+  const ventaGeneradaConvertida = useMemo(() => {
+    const conv = detalle?.conversion && typeof detalle.conversion === "object" ? detalle.conversion : {};
+    return detalle?.venta_generada || conv?.venta_generada || conv?.venta || row?.venta_generada || row?.venta || {};
+  }, [detalle, row]);
+
+  const tipoVentaConvertidaNombre = useMemo(() => {
+    if (!convertido) return "";
+    return safeStr(
+      getTipoVentaNombreFromSource(ventaGeneradaConvertida) ||
+        getTipoVentaNombreFromSource(detalle?.conversion) ||
+        getTipoVentaNombreFromSource(row)
+    );
+  }, [convertido, ventaGeneradaConvertida, detalle, row]);
+
+  const tipoVentaSelected = useMemo(() => {
+    const found = tiposVentaList.find((t) => String(getTipoVentaId(t) ?? "") === String(idTipoVenta));
+    if (found) return found;
+    if (convertido && tipoVentaConvertidaNombre) {
+      return { id: idTipoVenta || "__tipo_convertido__", nombre: tipoVentaConvertidaNombre };
+    }
+    return null;
+  }, [tiposVentaList, idTipoVenta, convertido, tipoVentaConvertidaNombre]);
 
   const isContado = useMemo(() => isContadoTipoVenta(tipoVentaSelected), [tipoVentaSelected]);
   const isCuentaCorriente = useMemo(() => !isContado && (tipoVentaSelected ? isCuentaCorrienteTipoVenta(tipoVentaSelected) || true : false), [isContado, tipoVentaSelected]);
@@ -521,6 +855,37 @@ export default function ModalAsignarPresupuestoVenta({
     }
   }, []);
 
+
+  const fetchVentaGeneradaInfo = useCallback(async (idVenta) => {
+    const id = Number(idVenta || 0);
+    if (!id) return null;
+    try {
+      const data = await apiGetJson(`${API_VENTA_GET}&id_movimiento=${encodeURIComponent(id)}`);
+      const venta =
+        data?.venta ||
+        data?.movimiento ||
+        data?.venta_generada ||
+        data?.data?.venta ||
+        data?.data?.movimiento ||
+        (Array.isArray(data?.ventas) ? data.ventas[0] : null) ||
+        (Array.isArray(data?.movimientos) ? data.movimientos[0] : null) ||
+        (Array.isArray(data?.data) ? data.data[0] : null) ||
+        {};
+      const medios = getFirstArray(
+        data?.medios_pago_detalle,
+        data?.medios_pago,
+        data?.medios,
+        venta?.medios_pago_detalle,
+        venta?.medios_pago,
+        venta?.medios,
+        venta?.movimientos_medios_pago
+      );
+      return { ...venta, medios_pago_detalle: medios };
+    } catch {
+      return null;
+    }
+  }, []);
+
   const fetchDetalle = useCallback(async () => {
     if (!idPresupuesto) return;
     abortRef.current?.abort?.();
@@ -530,11 +895,72 @@ export default function ModalAsignarPresupuestoVenta({
     try {
       const data = await apiGetJson(`${API_PRESUPUESTO_GET}&id_movimiento=${encodeURIComponent(idPresupuesto)}`);
       if (controller.signal.aborted) return;
+      const conversion = data?.conversion || data?.presupuesto_conversion || data?.conversion_presupuesto || null;
+      const presupuestoBase = data?.presupuesto || data?.movimiento || row || null;
+      let ventaGenerada =
+        data?.venta_generada ||
+        data?.venta_convertida ||
+        data?.movimiento_venta ||
+        data?.venta ||
+        conversion?.venta_generada ||
+        conversion?.venta ||
+        row?.venta_generada ||
+        row?.venta ||
+        null;
+
+      const idVentaGenerada = getVentaGeneradaId({
+        ...row,
+        ...(conversion || {}),
+        venta_generada: ventaGenerada,
+      });
+
+      if (convertido && idVentaGenerada) {
+        const ventaCompleta = await fetchVentaGeneradaInfo(idVentaGenerada);
+        if (ventaCompleta) {
+          const mediosBase = getFirstArray(
+            ventaGenerada?.medios_pago_detalle,
+            ventaGenerada?.medios_pago,
+            ventaGenerada?.medios
+          );
+          const mediosCompletos = getFirstArray(
+            ventaCompleta?.medios_pago_detalle,
+            ventaCompleta?.medios_pago,
+            ventaCompleta?.medios
+          );
+          ventaGenerada = {
+            ...(ventaGenerada || {}),
+            ...ventaCompleta,
+            medios_pago_detalle: mediosCompletos.length ? mediosCompletos : mediosBase,
+          };
+        }
+      }
+
       const nextDetalle = {
-        presupuesto: data?.presupuesto || data?.movimiento || row || null,
+        presupuesto: presupuestoBase,
         items: Array.isArray(data?.items) ? data.items : [],
+        conversion,
+        venta_generada: ventaGenerada,
       };
       setDetalle(nextDetalle);
+
+      if (convertido) {
+        const ventaSource = { ...(conversion || {}), ...(ventaGenerada || {}) };
+        const fechaConvertida = clampFechaHastaHoy(
+          ventaSource?.fecha || ventaSource?.fecha_movimiento || conversion?.fecha_conversion || row?.fecha_conversion || row?.fecha || todayISO()
+        );
+        if (fechaConvertida) setFecha(String(fechaConvertida).slice(0, 10));
+
+        const nextTipoVenta = resolveTipoVentaIdFromVenta(ventaSource, tiposVentaList);
+        if (nextTipoVenta) setIdTipoVenta(nextTipoVenta);
+
+        const nextMedios = buildMediosFilasFromVenta(
+          ventaSource,
+          mediosPagoList,
+          safeNumber(ventaSource?.monto_total ?? ventaSource?.total ?? presupuestoBase?.monto_total ?? row?.monto_total ?? row?.total)
+        );
+        setMediosFilas(nextMedios);
+      }
+
       const clienteId = getClienteId(nextDetalle.presupuesto) || getClienteId(row);
       fetchClienteFiscal(clienteId);
     } catch (e) {
@@ -542,7 +968,7 @@ export default function ModalAsignarPresupuestoVenta({
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, [idPresupuesto, row, fetchClienteFiscal, showToast]);
+  }, [idPresupuesto, row, fetchClienteFiscal, showToast, convertido, fetchVentaGeneradaInfo, tiposVentaList, mediosPagoList]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -552,19 +978,19 @@ export default function ModalAsignarPresupuestoVenta({
     setFiscalCuitInput("");
     setMostrarCuitFiscal(false);
     setIdTipoVenta("");
-    setMediosFilas([buildEmptyMedioPago(0)]);
+    setMediosFilas(convertido ? [] : [buildEmptyMedioPago(0)]);
     setFecha(todayISO());
     fetchDetalle();
     return () => abortRef.current?.abort?.();
-  }, [open, row, fetchDetalle]);
+  }, [open, row, fetchDetalle, convertido]);
 
   useEffect(() => {
-    if (!open || !isContado) return;
+    if (!open || !isContado || convertido) return;
     setMediosFilas((prev) => {
       const arr = Array.isArray(prev) ? prev : [];
       return arr.length ? arr : [buildEmptyMedioPago(0)];
     });
-  }, [open, isContado]);
+  }, [open, isContado, convertido]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -762,26 +1188,82 @@ export default function ModalAsignarPresupuestoVenta({
     return data;
   }, [clienteBase.id_cliente, total]);
 
+  const getIdVentaFromResponse = useCallback((info) => {
+    const id = Number(
+      info?.id_movimiento_venta ||
+        info?.id_movimiento ||
+        info?.id_venta ||
+        info?.ids?.[0] ||
+        info?.ids_movimiento?.[0] ||
+        info?.conversion?.id_venta ||
+        0
+    );
+    return Number.isFinite(id) && id > 0 ? id : 0;
+  }, []);
+
+  const actualizarChequeConArchivo = useCallback(async ({ idCheque, idMovimiento, cheque }) => {
+    if (!(cheque?.archivo instanceof File)) return null;
+
+    const idMov = Number(idMovimiento || 0);
+    if (!idMov) {
+      throw new Error("No se pudo adjuntar el archivo del cheque porque no se recibió el movimiento de la venta.");
+    }
+
+    const fd = new FormData();
+    const { idUsuario } = getAuthInfo();
+
+    fd.append("id_cheque", String(idCheque));
+    fd.append("id_movimiento", String(idMov));
+    fd.append("idUsuario", String(idUsuario || 0));
+    fd.append("tipo", String(cheque?.tipo || "cheque"));
+    fd.append("tipo_cheque", String(cheque?.tipo || "cheque"));
+
+    const fechaEmisionCheque = String(cheque?.fecha_emision || "").slice(0, 10);
+    const fechaPagoCheque = String(cheque?.fecha_pago || "").slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(fechaEmisionCheque)) {
+      fd.append("fecha_emision", fechaEmisionCheque);
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(fechaPagoCheque)) {
+      fd.append("fecha_pago", fechaPagoCheque);
+    }
+
+    fd.append("emisor", String(cheque?.emisor || "").trim().toUpperCase());
+    fd.append("numero_cheque", String(cheque?.numero_cheque || "").trim());
+    fd.append("importe", String(safeNumber(cheque?.importe || 0)));
+    fd.append("observaciones", String(cheque?.observaciones || "").trim());
+    fd.append("archivo", cheque.archivo, cheque.archivo_nombre || cheque.archivo.name || "cheque.pdf");
+
+    const data = await fetch(API_CHEQUES_ACTUALIZAR, {
+      method: "POST",
+      headers: buildFormHeaders(),
+      body: fd,
+    }).then(parseJsonOrThrow);
+
+    if (!data?.exito) throw new Error(data?.mensaje || "No se pudo adjuntar el archivo del cheque.");
+    return data;
+  }, []);
+
   const subirArchivosChequesCreados = useCallback(async (info) => {
     const creados = Array.isArray(info?.cheques_creados) ? info.cheques_creados : [];
     if (!creados.length) return;
 
+    const idVentaFallback = getIdVentaFromResponse(info);
+
     await Promise.all(creados.map(async (ch) => {
       const uid = String(ch?.frontend_row_uid || "");
       const idCheque = Number(ch?.id_cheque || 0);
+      const idMovimiento = Number(ch?.id_movimiento || idVentaFallback || 0);
+      const rowMedio = (Array.isArray(mediosFilas) ? mediosFilas : []).find((r) => String(r.id) === uid);
       const file = getChequeFileFromRows(mediosFilas, uid);
-      if (!idCheque || !file) return;
+      if (!idCheque || !file || !rowMedio?.cheque) return;
 
-      const fd = new FormData();
-      fd.append("id_cheque", String(idCheque));
-      fd.append("archivo", file, file.name || "cheque.pdf");
-      await fetch(API_CHEQUES_ACTUALIZAR, {
-        method: "POST",
-        headers: buildFormHeaders(),
-        body: fd,
-      }).then(parseJsonOrThrow);
+      await actualizarChequeConArchivo({
+        idCheque,
+        idMovimiento,
+        cheque: rowMedio.cheque,
+      });
     }));
-  }, [mediosFilas]);
+  }, [mediosFilas, actualizarChequeConArchivo, getIdVentaFromResponse]);
 
   const guardarConversion = useCallback(async ({ modo, fiscal = null }) => {
     const fechaEnvio = String(fecha || "").slice(0, 10);
@@ -1139,7 +1621,7 @@ export default function ModalAsignarPresupuestoVenta({
                             value={fecha}
                             max={todayISO()}
                             onChange={(e) => setFecha(clampFechaHastaHoy(e.target.value))}
-                            disabled={saving}
+                            disabled={saving || convertido}
                           />
                           <label className="nc-label">Fecha</label>
                         </div>
@@ -1158,29 +1640,56 @@ export default function ModalAsignarPresupuestoVenta({
                           <label className="nc-label nc-label--up">Cliente *</label>
                         </div>
 
-                        <div className="nc-field">
-                          <select
-                            className="nc-input nc-select"
-                            value={idTipoVenta}
-                            onChange={(e) => setIdTipoVenta(e.target.value)}
-                            disabled={saving}
-                          >
-                            <option value="">Seleccionar</option>
-                            {tiposVentaList.map((t) => {
-                              const id = getTipoVentaId(t);
-                              return <option key={id || safeStr(t.nombre)} value={id || ""}>{safeText(t.nombre || t.descripcion || t.detalle)}</option>;
-                            })}
-                          </select>
-                          <label className={`nc-label${idTipoVenta ? " nc-label--up" : ""}`}>Tipo de pago *</label>
-                        </div>
+                        {convertido ? (
+                          <div className="nc-field dc-asignar-readonly-field">
+                            <input
+                              className="nc-input"
+                              type="text"
+                              value={safeText(
+                                tipoVentaSelected?.nombre ||
+                                  tipoVentaSelected?.descripcion ||
+                                  tipoVentaSelected?.detalle ||
+                                  tipoVentaConvertidaNombre ||
+                                  "Tipo de pago guardado"
+                              )}
+                              readOnly
+                              disabled
+                            />
+                            <label className="nc-label nc-label--up">Tipo de pago *</label>
+                          </div>
+                        ) : (
+                          <div className="nc-field">
+                            <select
+                              className="nc-input nc-select"
+                              value={idTipoVenta}
+                              onChange={(e) => setIdTipoVenta(e.target.value)}
+                              disabled={saving}
+                            >
+                              <option value="">Seleccionar</option>
+                              {tiposVentaList.map((t) => {
+                                const id = getTipoVentaId(t);
+                                return <option key={id || safeStr(t.nombre)} value={id || ""}>{safeText(t.nombre || t.descripcion || t.detalle)}</option>;
+                              })}
+                            </select>
+                            <label className={`nc-label${idTipoVenta ? " nc-label--up" : ""}`}>Tipo de pago *</label>
+                          </div>
+                        )}
 
-                        {isCuentaCorriente ? (
+
+
+                        {isCuentaCorriente && !convertido ? (
                           <div className="nc-cc-info">
                             Quedará registrada como <b>pendiente de cobro</b> en la cuenta corriente del cliente.
                           </div>
                         ) : null}
 
-                        {isContado ? (
+                        {convertido && mediosFilas.length ? (
+                          <ReadOnlyMediosPagoVenta
+                            mediosFilas={mediosFilas}
+                            mediosPagoList={mediosPagoList}
+                            totalCompra={total}
+                          />
+                        ) : isContado ? (
                           <PanelMediosPagoInlineVenta
                             mediosFilas={mediosFilas}
                             mediosPagoList={mediosPagoList}

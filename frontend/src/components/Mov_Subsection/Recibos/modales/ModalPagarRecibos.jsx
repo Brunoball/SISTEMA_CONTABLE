@@ -24,6 +24,7 @@ import ModalDetalleMovimiento from "../../../Global/Modales/ModalDetalleMovimien
 import { buildReciboHTML } from "../../../../utils/reciboTemplate";
 
 const API_CHECK_NUMERO_CHEQUE = `${BASE_URL}/api.php?action=mov_global_cheques_obtener&modo=verificar_numero`;
+const API_CHEQUES_ACTUALIZAR = `${BASE_URL}/api.php?action=mov_global_cheques_actualizar`;
 
 /* =========================
    Helpers
@@ -1125,6 +1126,8 @@ export default function ModalPagarRecibos({
     return mediosFilas.map((mp) => {
       const esCheque = isMedioPagoCheque(mediosPago, mp.id_medio_pago);
       return {
+        id: mp.id,
+        frontend_row_uid: mp.id,
         id_medio_pago: Number(mp.id_medio_pago),
         monto:
           esCheque && mp.chequeData
@@ -1180,6 +1183,95 @@ export default function ModalPagarRecibos({
       };
     },
     [cliente]
+  );
+
+  /* =========================
+     Adjuntar archivo de cheque/eCheq creado desde Recibos
+  ========================= */
+  const actualizarChequeConArchivo = useCallback(
+    async ({ idCheque, idMovimiento, cheque }) => {
+      if (!(cheque?.archivo instanceof File)) return null;
+
+      const fd = new FormData();
+      const { idUsuario } = getAuthInfo();
+
+      fd.append("id_cheque", String(idCheque));
+      fd.append("id_movimiento", String(idMovimiento));
+      fd.append("idUsuario", String(idUsuario || 0));
+      fd.append("tipo", String(cheque?.tipo || cheque?.tipo_cheque || "cheque"));
+      fd.append("tipo_cheque", String(cheque?.tipo || cheque?.tipo_cheque || "cheque"));
+
+      const fechaEmisionCheque = String(cheque?.fecha_emision || "").slice(0, 10);
+      const fechaPagoCheque = String(cheque?.fecha_pago || "").slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaEmisionCheque)) {
+        throw new Error("El cheque no tiene fecha de emisión válida cargada desde el modal.");
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaPagoCheque)) {
+        throw new Error("El cheque no tiene fecha de pago válida cargada desde el modal.");
+      }
+
+      fd.append("fecha_emision", fechaEmisionCheque);
+      fd.append("emisor", String(cheque?.emisor || "").trim().toUpperCase());
+      fd.append("numero_cheque", String(cheque?.numero_cheque || "").trim());
+      fd.append("importe", String(safeNumber(cheque?.importe || 0)));
+      fd.append("fecha_pago", fechaPagoCheque);
+      fd.append("observaciones", String(cheque?.observaciones || "").trim());
+      fd.append("archivo", cheque.archivo, cheque.archivo_nombre || cheque.archivo.name || "adjunto");
+
+      const res = await fetch(API_CHEQUES_ACTUALIZAR, {
+        method: "POST",
+        headers: buildAuthHeaders(false),
+        body: fd,
+      });
+      const data = await parseJsonOrThrow(res);
+      if (!data?.exito) {
+        throw new Error(data?.mensaje || "No se pudo adjuntar el archivo del cheque.");
+      }
+      return data;
+    },
+    []
+  );
+
+  const subirArchivosChequesCreados = useCallback(
+    async (info) => {
+      const warnings = [];
+      const creados = Array.isArray(info?.cheques_creados)
+        ? info.cheques_creados
+        : [];
+      if (!creados.length) return warnings;
+
+      const filasCheque = mediosFilas.filter(
+        (mp) => mp?.chequeData && mp.chequeData.archivo instanceof File
+      );
+
+      for (const mp of filasCheque) {
+        const backendCheque = creados.find(
+          (x) => String(x?.frontend_row_uid || "") === String(mp.id)
+        );
+        if (!backendCheque?.id_cheque || !backendCheque?.id_movimiento) {
+          warnings.push(
+            `No se pudo vincular el archivo del cheque ${mp?.chequeData?.numero_cheque || ""}.`
+          );
+          continue;
+        }
+
+        try {
+          await actualizarChequeConArchivo({
+            idCheque: backendCheque.id_cheque,
+            idMovimiento: backendCheque.id_movimiento,
+            cheque: mp.chequeData,
+          });
+        } catch (e) {
+          warnings.push(
+            e?.message ||
+              `No se pudo adjuntar el archivo del cheque ${mp?.chequeData?.numero_cheque || ""}.`
+          );
+        }
+      }
+
+      return warnings;
+    },
+    [mediosFilas, actualizarChequeConArchivo]
   );
 
   /* =========================
@@ -1259,6 +1351,8 @@ export default function ModalPagarRecibos({
         });
       }
 
+      const warningsArchivosCheque = await subirArchivosChequesCreados(resp);
+
       const idsCobroResp = Array.isArray(resp?.ids_cobro)
         ? resp.ids_cobro.map((x) => Number(x || 0)).filter(Boolean)
         : [];
@@ -1299,7 +1393,14 @@ export default function ModalPagarRecibos({
       setPagaTodo(false);
       setMediosFilas([buildEmptyMedioPago()]);
 
-      onToast?.("exito", "Pago realizado correctamente.");
+      if (warningsArchivosCheque.length > 0) {
+        onToast?.(
+          "advertencia",
+          `Pago realizado, pero hubo problemas con archivo/s de cheque: ${warningsArchivosCheque.join(" | ")}`
+        );
+      } else {
+        onToast?.("exito", "Pago realizado correctamente.");
+      }
       setTimeout(recomputeTbodyScroll, 0);
     } catch (e) {
       onToast?.(

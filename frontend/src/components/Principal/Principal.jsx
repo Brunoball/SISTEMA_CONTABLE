@@ -373,6 +373,7 @@ const PLAN_BASICO_NAV_KEYS = new Set([
   "movimientos",
   "flujo-de-caja",
   "cuentas-corrientes",
+  "stock",
   "configuracion",
 ]);
 

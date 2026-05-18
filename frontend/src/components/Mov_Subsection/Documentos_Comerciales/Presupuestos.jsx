@@ -81,6 +81,7 @@ const PAGE_SIZE = 100;
 const PROBE_LIMIT = PAGE_SIZE + 1;
 const SKELETON_ROWS = 10;
 const LIVE_POLL_MS = 6000;
+const PRESUPUESTOS_CACHE_NS = "presupuestos:listar:v2";
 
 function moneyARS(v) {
   const n = Number(v || 0);
@@ -538,7 +539,7 @@ export default function Presupuestos() {
     const cacheKey = `${fromAPI}|${toAPI}|${qKey}`;
 
     if (!append && offset === 0 && !cacheRef.current.has(cacheKey)) {
-      const persisted = readMovPerfCache("presupuestos:listar", cacheKey);
+      const persisted = readMovPerfCache(PRESUPUESTOS_CACHE_NS, cacheKey);
       if (persisted?.rows) cacheRef.current.set(cacheKey, persisted);
     }
 
@@ -575,7 +576,7 @@ export default function Presupuestos() {
         if (!append && offset === 0) {
           const cachePayload = { rows: nextRows, hasMore: newHasMore, nextOffset: offsetRef.current };
           cacheRef.current.set(cacheKey, cachePayload);
-          writeMovPerfCache("presupuestos:listar", cacheKey, cachePayload);
+          writeMovPerfCache(PRESUPUESTOS_CACHE_NS, cacheKey, cachePayload);
         }
         return nextRows;
       });
@@ -640,13 +641,13 @@ export default function Presupuestos() {
 
   const handleDateRangeChange = useCallback((newRange) => {
     cacheRef.current.clear();
-    clearMovPerfCache("presupuestos:listar");
+    clearMovPerfCache(PRESUPUESTOS_CACHE_NS);
     setDateRange(newRange);
   }, [setDateRange]);
 
   const reloadVista = useCallback(async () => {
     cacheRef.current.clear();
-    clearMovPerfCache("presupuestos:listar");
+    clearMovPerfCache(PRESUPUESTOS_CACHE_NS);
     signedUrlCacheRef.current.clear();
     await loadRows({ from: dateRange.from, to: dateRange.to, query: q, offset: 0, append: false });
     try { liveTokenRef.current = await fetchLiveToken(dateRange.from, dateRange.to, q); } catch {}

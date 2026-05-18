@@ -5,6 +5,7 @@ import "../../../Global/Global_css/Global_responsive.css";
 import "../../../Global/Global_css/roots.css";
 import BASE_URL from "../../../../config/config";
 import GlobalAutocomplete from "../../../Global/GlobalAutocomplete/GlobalAutocomplete.jsx";
+import ModalClienteFiscalArca from "../../../Global/Modales/ModalClienteFiscalArca.jsx";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faFileInvoiceDollar,
@@ -15,6 +16,7 @@ import {
 import { savePresupuestoPdf } from "../../../../utils/PresupuestoPdfBuilder";
 
 const NULL_OPTION = "";
+const ADD_CLIENTE_OPTION = { __action: "add_cliente", id: "__add_cliente__", nombre: "➕ Agregar cliente" };
 const IVA_OPTIONS = [
   { label: "0 %", value: 0 },
   { label: "10,5 %", value: 10.5 },
@@ -119,6 +121,61 @@ function getStockProductoId(d) {
 
 function getClienteNombre(c) {
   return safeStr(c?.nombre || c?.razon_social || c?.cliente || c?.label || "");
+}
+
+function isAddClienteOption(option) {
+  return option?.__action === "add_cliente";
+}
+
+function onlyDigits(v) {
+  return String(v ?? "").replace(/\D+/g, "");
+}
+
+function isTemaOscuro() {
+  return (
+    document.documentElement.getAttribute("data-theme") === "oscuro" ||
+    document.body?.classList?.contains("dark")
+  );
+}
+
+function normalizeArcaSummaryPresupuesto(data) {
+  const x = data && typeof data === "object" ? data : {};
+  return {
+    cuit: onlyDigits(x.cuit || x.doc_nro || ""),
+    razon_social: safeStr(x.razon_social || x.nombre || x.denominacion || ""),
+    condicion_iva: safeStr(x.iva || x.condicion_iva || x.cond_iva || ""),
+    domicilio: safeStr(x.domicilio || x.direccion || ""),
+    doc_tipo: 80,
+    doc_nro: onlyDigits(x.cuit || x.doc_nro || ""),
+    origen: safeStr(x.origen || "arca_cuit"),
+  };
+}
+
+function normalizeClienteFiscalDbPresupuesto(data) {
+  const s = data && typeof data === "object" ? data : {};
+  return {
+    id_cliente_fiscal: Number(s.id_cliente_fiscal || 0) || null,
+    id_cliente: Number(s.id_cliente || 0) || null,
+    doc_tipo: Number(s.doc_tipo || 80) || 80,
+    doc_nro: onlyDigits(s.doc_nro || s.cuit || ""),
+    cuit: onlyDigits(s.cuit || s.doc_nro || ""),
+    razon_social: safeStr(s.razon_social || s.nombre || s.cliente || ""),
+    condicion_iva: safeStr(s.condicion_iva || s.cond_iva || ""),
+    domicilio: safeStr(s.domicilio || ""),
+    origen: safeStr(s.origen || "manual"),
+  };
+}
+
+function normalizeClienteSimplePresupuesto(data) {
+  const s = data && typeof data === "object" ? data : {};
+  const id = getClienteId(s) || Number(s.id_cliente || s.id || 0) || null;
+  return {
+    ...s,
+    id,
+    id_cliente: id,
+    nombre: safeStr(s.nombre || s.razon_social || s.label || s.cliente || ""),
+    activo: Number(s.activo ?? 1) === 0 ? 0 : 1,
+  };
 }
 
 function normalizeClienteFiscalPresupuesto(fiscalSource, clienteSource, nombreFallback = "Cliente") {
@@ -298,6 +355,7 @@ function PrecioDropdown({ precios, value, onChange, disabled }) {
     safePrecios.findIndex((p) => String(p.value) === String(value))
   );
   const selected = safePrecios[selectedIndex] || safePrecios[0] || null;
+
 
   useEffect(() => {
     if (!open) return;
@@ -653,9 +711,14 @@ async function apiPostForm(url, formData) {
 
 export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, onSaved }) {
   const API = `${BASE_URL}/api.php`;
+  const API_PADRON_CUIT = `${API}?action=padron_cuit&op=padron_cuit`;
+  const API_SAVE_CLIENTE_DESDE_ARCA = `${API}?action=cliente_fiscal_crear_desde_arca`;
   const normalizedLists = useMemo(() => normalizeLists(lists), [lists]);
-  const clientesList = normalizedLists.clientes;
+  const clientesBaseList = normalizedLists.clientes;
   const detallesList = normalizedLists.detalles;
+  const [localClientes, setLocalClientes] = useState(() => (Array.isArray(clientesBaseList) ? clientesBaseList : []));
+  const clientesList = localClientes;
+  const clientesOptions = useMemo(() => [ADD_CLIENTE_OPTION, ...clientesList], [clientesList]);
 
   const [fecha, setFecha] = useState(todayISO());
   const fechaInputRef = useRef(null);
@@ -665,6 +728,34 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
   const [rows, setRows] = useState([buildEmptyRow()]);
   const [saving, setSaving] = useState(false);
   const [configFacturacion, setConfigFacturacion] = useState(null);
+  const [addUI, setAddUI] = useState({
+    open: false,
+    cuit: "",
+    fiscalData: null,
+    fiscalError: "",
+    lookupLoading: false,
+    saving: false,
+  });
+  const [dark, setDark] = useState(isTemaOscuro);
+
+  useEffect(() => {
+    setLocalClientes(Array.isArray(clientesBaseList) ? clientesBaseList : []);
+  }, [clientesBaseList]);
+
+  useEffect(() => {
+    const update = () => setDark(isTemaOscuro());
+    const o1 = new MutationObserver(update);
+    o1.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    let o2 = null;
+    if (document.body) {
+      o2 = new MutationObserver(update);
+      o2.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    }
+    return () => {
+      o1.disconnect();
+      o2?.disconnect?.();
+    };
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -674,6 +765,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
     setObservaciones("");
     setRows([buildEmptyRow()]);
     setSaving(false);
+    setAddUI({ open: false, cuit: "", fiscalData: null, fiscalError: "", lookupLoading: false, saving: false });
     let alive = true;
     apiGetJson(`${API}?action=config_facturacion_get`)
       .then((data) => {
@@ -700,16 +792,151 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
     setRows((prev) => [...prev, buildEmptyRow()]);
   }, []);
 
+  const resetAddUIState = useCallback(() => {
+    setAddUI({ open: false, cuit: "", fiscalData: null, fiscalError: "", lookupLoading: false, saving: false });
+  }, []);
+
+  const registrarClienteLocal = useCallback((clienteRaw, fiscalRaw = null) => {
+    const cliente = normalizeClienteSimplePresupuesto(clienteRaw);
+    if (!cliente.id_cliente) return cliente;
+
+    const item = {
+      id: Number(cliente.id_cliente),
+      id_cliente: Number(cliente.id_cliente),
+      nombre: cliente.nombre,
+      activo: cliente.activo,
+    };
+
+    setLocalClientes((prev) => {
+      const arr = Array.isArray(prev) ? prev.slice() : [];
+      const idx = arr.findIndex((x) => Number(getClienteId(x)) === Number(cliente.id_cliente));
+      if (idx >= 0) arr[idx] = { ...arr[idx], ...item };
+      else arr.push(item);
+      return arr;
+    });
+
+    setClienteSel(item);
+    setCliInput(cliente.nombre || "");
+
+    return { ...item, cliente_fiscal: fiscalRaw || null };
+  }, []);
+
+  const startAddCliente = useCallback(() => {
+    if (saving) return;
+    setAddUI({
+      open: true,
+      cuit: "",
+      fiscalData: null,
+      fiscalError: "",
+      lookupLoading: false,
+      saving: false,
+    });
+  }, [saving]);
+
+  const closeAddCliente = useCallback(() => {
+    if (addUI.saving || addUI.lookupLoading) return;
+    resetAddUIState();
+  }, [addUI.saving, addUI.lookupLoading, resetAddUIState]);
+
+  const consultarArcaAddCliente = useCallback(async () => {
+    const cuit = onlyDigits(addUI.cuit);
+    if (cuit.length !== 11) {
+      setAddUI((p) => ({ ...p, fiscalError: "Ingresá un CUIT válido de 11 dígitos." }));
+      return null;
+    }
+
+    setAddUI((p) => ({ ...p, lookupLoading: true, fiscalError: "", fiscalData: null }));
+    try {
+      const data = await apiGetJson(`${API_PADRON_CUIT}&cuit=${encodeURIComponent(cuit)}`);
+      const raw = data?.data?.summary || data?.summary || data?.persona || data?.fiscal || data?.data || data?.resultado || data;
+      const fiscal = normalizeArcaSummaryPresupuesto({ ...raw, cuit });
+      if (!fiscal.cuit || !fiscal.razon_social) throw new Error("ARCA devolvió datos incompletos para ese CUIT.");
+      setAddUI((p) => ({ ...p, lookupLoading: false, fiscalData: fiscal, fiscalError: "" }));
+      return fiscal;
+    } catch (e) {
+      setAddUI((p) => ({
+        ...p,
+        lookupLoading: false,
+        fiscalData: null,
+        fiscalError: e?.message || "No se pudo consultar ARCA.",
+      }));
+      return null;
+    }
+  }, [API_PADRON_CUIT, addUI.cuit]);
+
+  const guardarNuevoClienteDesdeArca = useCallback(async () => {
+    const cuit = onlyDigits(addUI.cuit);
+    if (cuit.length !== 11) {
+      const msg = "Ingresá un CUIT válido de 11 dígitos, presioná Consultar ARCA y después confirmá.";
+      setAddUI((p) => ({ ...p, fiscalError: msg }));
+      onToast?.("advertencia", msg, 3600);
+      return;
+    }
+
+    setAddUI((p) => ({ ...p, saving: true, fiscalError: "" }));
+    onToast?.("cargando", "Consultando ARCA y creando cliente…", 12000);
+
+    try {
+      let fiscal = addUI.fiscalData;
+      if (!fiscal || onlyDigits(fiscal.cuit) !== cuit) {
+        const data = await apiGetJson(`${API_PADRON_CUIT}&cuit=${encodeURIComponent(cuit)}`);
+        const raw = data?.data?.summary || data?.summary || data?.persona || data?.fiscal || data?.data || data?.resultado || data;
+        fiscal = normalizeArcaSummaryPresupuesto({ ...raw, cuit });
+      }
+
+      if (!fiscal?.cuit || !fiscal?.razon_social) {
+        throw new Error("Primero consultá un CUIT válido en ARCA.");
+      }
+
+      const { idUsuario } = getAuditUserPayload();
+      const saved = await apiPostJson(API_SAVE_CLIENTE_DESDE_ARCA, {
+        idUsuario,
+        id_cliente: null,
+        doc_tipo: Number(fiscal.doc_tipo || 80),
+        doc_nro: fiscal.doc_nro || fiscal.cuit,
+        cuit: fiscal.cuit,
+        razon_social: fiscal.razon_social,
+        condicion_iva: fiscal.condicion_iva,
+        domicilio: fiscal.domicilio,
+        origen: fiscal.origen || "arca_cuit",
+        actualizar_nombre_cliente: 1,
+        activo: 1,
+      });
+
+      if (!saved?.exito || !saved?.cliente || !saved?.cliente_fiscal) {
+        throw new Error(saved?.mensaje || "No se pudo guardar el cliente fiscal.");
+      }
+
+      const fiscalDb = normalizeClienteFiscalDbPresupuesto(saved.cliente_fiscal);
+      const cliente = registrarClienteLocal(saved.cliente, fiscalDb);
+      resetAddUIState();
+
+      if (saved?.ya_existia) {
+        onToast?.("exito", `El cliente ya existía. Se seleccionó "${cliente?.nombre || fiscal.razon_social}" sin duplicarlo.`, 3600);
+      } else {
+        onToast?.("exito", `Cliente fiscal creado: "${cliente?.nombre || fiscal.razon_social}"`, 3200);
+      }
+    } catch (e) {
+      setAddUI((p) => ({ ...p, saving: false, fiscalError: e?.message || "No se pudo guardar el cliente desde ARCA." }));
+      onToast?.("error", e?.message || "No se pudo guardar el cliente desde ARCA.", 5200);
+    }
+  }, [API_PADRON_CUIT, API_SAVE_CLIENTE_DESDE_ARCA, addUI.cuit, addUI.fiscalData, onToast, registrarClienteLocal, resetAddUIState]);
+
   const handleSelectCliente = useCallback((cliente) => {
+    if (isAddClienteOption(cliente)) {
+      startAddCliente();
+      return;
+    }
+
     const id = getClienteId(cliente);
     setClienteSel(id ? cliente : null);
     setCliInput(getClienteNombre(cliente));
-  }, []);
+  }, [startAddCliente]);
 
   const handleClienteInputChange = useCallback((value) => {
     setCliInput(value);
     const norm = normalizeText(value);
-    const exact = clientesList.find((c) => normalizeText(getClienteNombre(c)) === norm) || null;
+    const exact = clientesList.find((c) => !isAddClienteOption(c) && normalizeText(getClienteNombre(c)) === norm) || null;
     setClienteSel(exact);
   }, [clientesList]);
 
@@ -878,6 +1105,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
     if (!open) return undefined;
 
     const handleKeyDown = (e) => {
+      if (addUI.open) return;
       if (e.key === "Escape" || e.key === "Esc") {
         e.preventDefault();
         requestClose();
@@ -886,7 +1114,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [open, requestClose]);
+  }, [open, requestClose, addUI.open]);
 
   const totals = useMemo(() => {
     return computedRows.reduce(
@@ -1284,12 +1512,12 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
                         value={cliInput}
                         onChange={handleClienteInputChange}
                         onSelect={handleSelectCliente}
-                        options={clientesList}
-                        getOptionLabel={(c) => getClienteNombre(c)}
-                        getOptionValue={(c) => String(getClienteId(c) || getClienteNombre(c))}
+                        options={clientesOptions}
+                        getOptionLabel={(c) => isAddClienteOption(c) ? "➕ Agregar cliente" : getClienteNombre(c)}
+                        getOptionValue={(c) => isAddClienteOption(c) ? "__add_cliente__" : String(getClienteId(c) || getClienteNombre(c))}
                         label="Cliente *"
                         placeholder=" "
-                        disabled={saving}
+                        disabled={saving || addUI.open}
                         showAllOnFocus={true}
                         maxItems={25}
                         inputClassName="nc-input"
@@ -1326,6 +1554,30 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
           </div>
         </form>
       </div>
+
+      <ModalClienteFiscalArca
+        open={addUI.open}
+        dark={dark}
+        title="Agregar cliente por CUIT"
+        infoTitle="Alta rápida por CUIT"
+        description={
+          <>
+            Ingresá el CUIT, consultamos ARCA, guardamos la razón social en <b>Clientes</b> y los datos completos en <b>Clientes fiscales</b>.
+          </>
+        }
+        cuit={addUI.cuit}
+        fiscalData={addUI.fiscalData}
+        error={addUI.fiscalError}
+        loading={addUI.lookupLoading}
+        saving={addUI.saving}
+        confirmText="Confirmar y cargar cliente"
+        footerHelp="Primero buscá el CUIT. Cuando aparezcan los datos, confirmá para guardar la razón social en clientes y los datos completos en clientes fiscales."
+        requireFiscalData={true}
+        onCuitChange={(v) => setAddUI((p) => ({ ...p, cuit: v, fiscalData: null, fiscalError: "" }))}
+        onLookup={consultarArcaAddCliente}
+        onClose={closeAddCliente}
+        onConfirm={guardarNuevoClienteDesdeArca}
+      />
     </div>,
     document.body
   );

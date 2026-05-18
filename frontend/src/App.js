@@ -151,6 +151,7 @@ const PLAN_BASICO_MODULES = new Set([
   "movimientos",
   "flujo-caja",
   "cuentas-corrientes",
+  "stock",
   "configuracion",
 ]);
 

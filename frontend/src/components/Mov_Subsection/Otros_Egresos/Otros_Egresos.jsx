@@ -91,6 +91,146 @@ function getDepositoChequeLabel(row) {
 }
 
 
+
+function buildDepositoChequeMedioDetalle(row) {
+  const label = getDepositoChequeLabel(row);
+  if (!label) return null;
+
+  const tipoRaw = String(
+    row?.cheque_tipo ??
+      row?.cheque?.tipo ??
+      row?.cheque?.tipo_cheque ??
+      row?.medio_pago_nombre ??
+      row?.medio_pago ??
+      row?.comprobante_tipo ??
+      "CHEQUE"
+  )
+    .toUpperCase()
+    .replace(/[-_]/g, " ")
+    .trim();
+
+  const tipoLower = tipoRaw.includes("ECHEQ") || tipoRaw.includes("E CHEQ") ? "echeq" : "cheque";
+  const tipoNombre = tipoLower === "echeq" ? "ECHEQ" : "CHEQUE";
+
+  const importe =
+    Number(
+      row?.cheque_importe ??
+        row?.cheque?.importe ??
+        row?.monto_total ??
+        row?.total ??
+        row?.total_general ??
+        0
+    ) || 0;
+
+  const descripcionCheque = String(
+    row?.cheque_descripcion ??
+      row?.descripcion_cheque ??
+      row?.observaciones_cheque ??
+      row?.cheque?.descripcion ??
+      row?.cheque?.observaciones ??
+      row?.cheque?.cheque_descripcion ??
+      ""
+  ).trim();
+
+  const mp = {
+    id_movimiento_medio_pago: 0,
+    id_movimiento: row?.id_movimiento ?? null,
+    id_medio_pago: row?.id_medio_pago ?? null,
+    medio_pago_nombre: tipoNombre,
+    nombre_medio: tipoNombre,
+    medio_pago: tipoNombre,
+    monto: importe,
+    id_cheque: row?.cheque_id ?? row?.id_cheque ?? row?.cheque?.id_cheque ?? null,
+    cheque_tipo: tipoLower,
+    tipo_cheque: tipoLower,
+    numero_cheque: row?.cheque_numero ?? row?.numero_cheque ?? row?.cheque?.numero_cheque ?? "",
+    emisor: row?.cheque_emisor ?? row?.emisor ?? row?.cheque?.emisor ?? "",
+    fecha_emision:
+      row?.cheque_fecha_emision ?? row?.fecha_emision ?? row?.cheque?.fecha_emision ?? "",
+    fecha_pago: row?.cheque_fecha_pago ?? row?.fecha_pago ?? row?.cheque?.fecha_pago ?? "",
+    cheque_importe: importe,
+    cheque_descripcion: descripcionCheque,
+    descripcion: descripcionCheque,
+    observaciones: descripcionCheque,
+    detalle_deposito: label,
+    cheque: {
+      id_cheque: row?.cheque_id ?? row?.id_cheque ?? row?.cheque?.id_cheque ?? null,
+      tipo: tipoLower,
+      tipo_cheque: tipoLower,
+      cheque_tipo: tipoLower,
+      numero_cheque: row?.cheque_numero ?? row?.numero_cheque ?? row?.cheque?.numero_cheque ?? "",
+      emisor: row?.cheque_emisor ?? row?.emisor ?? row?.cheque?.emisor ?? "",
+      fecha_emision:
+        row?.cheque_fecha_emision ?? row?.fecha_emision ?? row?.cheque?.fecha_emision ?? "",
+      fecha_pago: row?.cheque_fecha_pago ?? row?.fecha_pago ?? row?.cheque?.fecha_pago ?? "",
+      importe,
+      descripcion: descripcionCheque,
+      observaciones: descripcionCheque,
+      cheque_descripcion: descripcionCheque,
+    },
+  };
+
+  return normalizeOtroEgresoMedioDetalle(mp);
+}
+
+function mergeDepositoChequeMedioDetalle(mp, depositoMp) {
+  if (!depositoMp) return mp;
+
+  const esCheque =
+    Number(mp?.id_cheque ?? 0) > 0 ||
+    String(mp?.cheque_tipo ?? mp?.tipo_cheque ?? mp?.medio_pago_nombre ?? mp?.nombre_medio ?? "")
+      .toUpperCase()
+      .includes("CHEQ");
+
+  if (!esCheque) return mp;
+
+  const descripcionCheque = String(
+    mp?.cheque_descripcion ??
+      mp?.descripcion ??
+      mp?.observaciones ??
+      mp?.cheque?.descripcion ??
+      depositoMp?.cheque_descripcion ??
+      depositoMp?.descripcion ??
+      ""
+  ).trim();
+
+  const montoMp = Number(mp?.monto ?? 0) || 0;
+  const importeMp = Number(mp?.cheque_importe ?? 0) || 0;
+
+  return normalizeOtroEgresoMedioDetalle({
+    ...depositoMp,
+    ...mp,
+    id_cheque: mp?.id_cheque ?? depositoMp?.id_cheque ?? null,
+    cheque_tipo: mp?.cheque_tipo || depositoMp?.cheque_tipo || depositoMp?.tipo_cheque || "",
+    tipo_cheque: mp?.tipo_cheque || depositoMp?.tipo_cheque || depositoMp?.cheque_tipo || "",
+    numero_cheque: mp?.numero_cheque || depositoMp?.numero_cheque || "",
+    emisor: mp?.emisor || depositoMp?.emisor || "",
+    fecha_emision: mp?.fecha_emision || depositoMp?.fecha_emision || "",
+    fecha_pago: mp?.fecha_pago || depositoMp?.fecha_pago || "",
+    monto: montoMp > 0 ? montoMp : depositoMp?.monto,
+    cheque_importe: importeMp > 0 ? importeMp : depositoMp?.cheque_importe,
+    cheque_descripcion: descripcionCheque,
+    descripcion: descripcionCheque,
+    observaciones: descripcionCheque,
+    cheque: {
+      ...(depositoMp?.cheque || {}),
+      ...(mp?.cheque || {}),
+      id_cheque: mp?.id_cheque ?? mp?.cheque?.id_cheque ?? depositoMp?.id_cheque ?? depositoMp?.cheque?.id_cheque ?? null,
+      tipo: mp?.cheque_tipo || mp?.tipo_cheque || mp?.cheque?.tipo || depositoMp?.cheque_tipo || depositoMp?.tipo_cheque || depositoMp?.cheque?.tipo || "",
+      tipo_cheque: mp?.tipo_cheque || mp?.cheque_tipo || mp?.cheque?.tipo_cheque || depositoMp?.tipo_cheque || depositoMp?.cheque_tipo || "",
+      cheque_tipo: mp?.cheque_tipo || mp?.tipo_cheque || mp?.cheque?.cheque_tipo || depositoMp?.cheque_tipo || depositoMp?.tipo_cheque || "",
+      numero_cheque: mp?.numero_cheque || mp?.cheque?.numero_cheque || depositoMp?.numero_cheque || depositoMp?.cheque?.numero_cheque || "",
+      emisor: mp?.emisor || mp?.cheque?.emisor || depositoMp?.emisor || depositoMp?.cheque?.emisor || "",
+      fecha_emision: mp?.fecha_emision || mp?.cheque?.fecha_emision || depositoMp?.fecha_emision || depositoMp?.cheque?.fecha_emision || "",
+      fecha_pago: mp?.fecha_pago || mp?.cheque?.fecha_pago || depositoMp?.fecha_pago || depositoMp?.cheque?.fecha_pago || "",
+      importe: importeMp > 0 ? importeMp : depositoMp?.cheque_importe ?? depositoMp?.monto ?? 0,
+      descripcion: descripcionCheque,
+      observaciones: descripcionCheque,
+      cheque_descripcion: descripcionCheque,
+    },
+  });
+}
+
 function isDepositoChequeEgreso(row) {
   if (!row || typeof row !== "object") return false;
   if (getDepositoChequeLabel(row)) return true;
@@ -151,6 +291,8 @@ function withDepositoChequeDetalle(row) {
     total,
   };
 
+  const mediosPagoDetalle = getOtroEgresoMediosDetalle(row);
+
   return {
     ...row,
     detalle: label,
@@ -159,6 +301,8 @@ function withDepositoChequeDetalle(row) {
     cantidad_items: 1,
     items: [itemCheque],
     items_detalle: [itemCheque],
+    medios_pago_detalle: mediosPagoDetalle,
+    cantidad_medios_pago: mediosPagoDetalle.length,
   };
 }
 
@@ -298,15 +442,30 @@ function getRowKey(r) {
 function normalizeOtroEgresoMedioDetalle(mp) {
   if (!mp || typeof mp !== "object") return mp;
 
-  const idCheque = Number(mp?.id_cheque ?? mp?.cheque_id ?? 0) || null;
-  const chequeTipo = String(mp?.cheque_tipo ?? mp?.tipo_cheque ?? mp?.tipo ?? "").trim();
-  const numeroCheque = String(mp?.numero_cheque ?? mp?.cheque_numero ?? "").trim();
-  const emisor = String(mp?.emisor ?? mp?.cheque_emisor ?? "").trim();
-  const fechaEmision = String(mp?.fecha_emision ?? mp?.cheque_fecha_emision ?? "").trim();
-  const fechaPago = String(mp?.fecha_pago ?? mp?.cheque_fecha_pago ?? "").trim();
-  const chequeImporte = Number(mp?.cheque_importe ?? mp?.importe ?? mp?.monto ?? 0) || 0;
+  const idCheque = Number(mp?.id_cheque ?? mp?.cheque_id ?? mp?.cheque?.id_cheque ?? 0) || null;
+  const chequeTipo = String(
+    mp?.cheque_tipo ?? mp?.tipo_cheque ?? mp?.cheque?.cheque_tipo ?? mp?.cheque?.tipo_cheque ?? mp?.cheque?.tipo ?? mp?.tipo ?? ""
+  ).trim();
+  const numeroCheque = String(mp?.numero_cheque ?? mp?.cheque_numero ?? mp?.cheque?.numero_cheque ?? "").trim();
+  const emisor = String(mp?.emisor ?? mp?.cheque_emisor ?? mp?.cheque?.emisor ?? "").trim();
+  const fechaEmision = String(mp?.fecha_emision ?? mp?.cheque_fecha_emision ?? mp?.cheque?.fecha_emision ?? "").trim();
+  const fechaPago = String(mp?.fecha_pago ?? mp?.cheque_fecha_pago ?? mp?.cheque?.fecha_pago ?? "").trim();
+  const chequeImporte = Number(mp?.cheque_importe ?? mp?.cheque?.importe ?? mp?.importe ?? mp?.monto ?? 0) || 0;
+  const chequeDescripcion = String(
+    mp?.cheque_descripcion ??
+      mp?.descripcion_cheque ??
+      mp?.observaciones_cheque ??
+      mp?.descripcion ??
+      mp?.observaciones ??
+      mp?.cheque?.cheque_descripcion ??
+      mp?.cheque?.descripcion ??
+      mp?.cheque?.observaciones ??
+      ""
+  ).trim();
 
   if (!idCheque && !chequeTipo && !numeroCheque && !emisor) return mp;
+
+  const tipoNormalizado = chequeTipo.toLowerCase();
 
   return {
     ...mp,
@@ -318,15 +477,23 @@ function normalizeOtroEgresoMedioDetalle(mp) {
     fecha_emision: fechaEmision,
     fecha_pago: fechaPago,
     cheque_importe: chequeImporte,
+    cheque_descripcion: chequeDescripcion,
+    descripcion: chequeDescripcion,
+    observaciones: chequeDescripcion,
     cheque: {
+      ...(mp?.cheque || {}),
       id_cheque: idCheque,
-      tipo: chequeTipo.toLowerCase(),
-      tipo_cheque: chequeTipo.toLowerCase(),
+      tipo: tipoNormalizado,
+      tipo_cheque: tipoNormalizado,
+      cheque_tipo: tipoNormalizado,
       numero_cheque: numeroCheque,
       emisor,
       fecha_emision: fechaEmision,
       fecha_pago: fechaPago,
       importe: chequeImporte,
+      descripcion: chequeDescripcion,
+      observaciones: chequeDescripcion,
+      cheque_descripcion: chequeDescripcion,
     },
   };
 }
@@ -345,7 +512,32 @@ function getOtroEgresoMediosDetalle(row) {
     }
   }
 
-  return detalle.map((mp) => normalizeOtroEgresoMedioDetalle(mp));
+  const normalizados = detalle.map((mp) => normalizeOtroEgresoMedioDetalle(mp));
+
+  if (!isDepositoChequeEgreso(row)) return normalizados;
+
+  const depositoMp = buildDepositoChequeMedioDetalle(row);
+  if (!depositoMp) return normalizados;
+
+  if (!normalizados.length) return [depositoMp];
+
+  let fusionoCheque = false;
+  const fusionados = normalizados.map((mp, idx) => {
+    const esCheque =
+      Number(mp?.id_cheque ?? 0) > 0 ||
+      String(mp?.cheque_tipo ?? mp?.tipo_cheque ?? mp?.medio_pago_nombre ?? mp?.nombre_medio ?? "")
+        .toUpperCase()
+        .includes("CHEQ");
+
+    if (!fusionoCheque && (esCheque || idx === 0)) {
+      fusionoCheque = true;
+      return mergeDepositoChequeMedioDetalle(mp, depositoMp);
+    }
+
+    return mp;
+  });
+
+  return fusionoCheque ? fusionados : [depositoMp, ...normalizados];
 }
 
 function getOtroEgresoCantidadMedios(row) {
@@ -375,6 +567,7 @@ function normalizeOtroEgresoRow(r) {
 
   const mediosPagoDetalle = getOtroEgresoMediosDetalle(r);
   const cantidadMediosPago = (() => {
+    if (isDepositoChequeEgreso(r)) return mediosPagoDetalle.length;
     const n = Number(r?.cantidad_medios_pago);
     if (Number.isFinite(n) && n >= 0) return n;
     return mediosPagoDetalle.length;

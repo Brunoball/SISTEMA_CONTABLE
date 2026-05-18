@@ -649,30 +649,41 @@ function drawHeader(doc, data, logoDataUrl) {
   text(doc, "Sin validez fiscal", rx + 82, headerY + 128);
 
   const recY = headerY + headerH;
-  const recH = 78;
-  rect(doc, B, recY, innerW, recH, 0.55);
-
   const clienteNombre = cl.razon || data?.labelCliente || "Cliente";
   const recLx = B + 10;
   const recRx = B + innerW * 0.46;
+  const rightLimit = B + innerW - 10;
+
+  const domLabelX = recRx - 12;
+  const domValueX = domLabelX + 46;
+  const domValueMaxW = Math.max(90, rightLimit - domValueX);
+  const domLineH = 11;
+  const domicilioLines = wrapByWidth(doc, cl.domicilio || "-", domValueMaxW);
+  const domicilioExtraH = Math.max(0, domicilioLines.length - 1) * domLineH;
+  const bottomRowY = recY + 62 + domicilioExtraH;
+  const recH = 78 + domicilioExtraH;
+
+  rect(doc, B, recY, innerW, recH, 0.55);
 
   set(doc, "helvetica", "bold", 9);
   text(doc, "CUIT / DOC:", recLx, recY + 18);
   text(doc, "Condición de venta:", recLx, recY + 46);
-  text(doc, "Documento:", recLx, recY + 62);
+  text(doc, "Documento:", recLx, bottomRowY);
   text(doc, "Apellido y Nombre / Razón Social:", 150, recY + 18);
-  text(doc, "Domicilio:", recRx, recY + 46);
-  text(doc, "Comprobante:", recRx, recY + 62);
+  text(doc, "Domicilio:", domLabelX, recY + 46);
+  text(doc, "Comprobante:", domLabelX, bottomRowY);
 
   set(doc, "helvetica", "normal", 9);
   text(doc, clampToWidth(doc, cl.cuit || "-", 165), recLx + 58, recY + 18);
   text(doc, clampToWidth(doc, cl.condVenta || FIX.condicion_venta_default, 190), recLx + 96, recY + 46);
-  text(doc, "Interno", recLx + 58, recY + 62);
+  text(doc, "Interno", recLx + 58, bottomRowY);
   const razonLines = wrapByWidth(doc, clienteNombre, innerW - (recRx - B) - 12);
   text(doc, razonLines[0] || "", recRx + 30, recY + 18);
   if (razonLines[1]) text(doc, razonLines[1], recRx + 185, recY + 30);
-  text(doc, clampToWidth(doc, cl.domicilio || "-", innerW - (recRx - B) - 12), recRx + 45, recY + 46);
-  text(doc, "Venta no facturada", recRx + 65, recY + 62);
+  domicilioLines.forEach((lineTxt, lineIdx) => {
+    text(doc, lineTxt, domValueX, recY + 46 + lineIdx * domLineH);
+  });
+  text(doc, "Venta no facturada", domLabelX + 65, bottomRowY);
 
   return recY + recH;
 }

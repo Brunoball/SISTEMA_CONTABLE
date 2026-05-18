@@ -547,30 +547,42 @@ function drawHeader(doc, data) {
   text(doc, s(em.inicio || "-"), W - B - 48, headerY + 128, { align: "right" });
 
   const recY = headerY + headerH;
-  const recH = 78;
+  const recLx = B + 10;
+  const recRx = B + innerW * 0.46;
+  const rightLimit = B + innerW - 10;
+
+  const domLabelX = recRx - 12;
+  const domValueX = domLabelX + 46;
+  const domValueMaxW = Math.max(90, rightLimit - domValueX);
+  const domLineH = 11;
+  const domicilioLines = wrapByWidth(doc, cl.dom || "-", domValueMaxW);
+  const domicilioExtraH = Math.max(0, domicilioLines.length - 1) * domLineH;
+  const bottomRowY = recY + 62 + domicilioExtraH;
+  const recH = 78 + domicilioExtraH;
+
   rect(doc, B, recY, innerW, recH, 0.55);
 
-  const recLx = B + 10;
   set(doc, "helvetica", "bold", 9);
   text(doc, "CUIT / DOC:", recLx, recY + 18);
   text(doc, "Condición frente al IVA:", recLx, recY + 46);
-  text(doc, "Documento:", recLx, recY + 62);
+  text(doc, "Documento:", recLx, bottomRowY);
   set(doc, "helvetica", "normal", 9);
   text(doc, cl.cuit || "-", recLx + 58, recY + 18);
   text(doc, clampToWidth(doc, cl.iva || "-", 190), recLx + 110, recY + 46);
-  text(doc, "Remito interno", recLx + 58, recY + 62);
+  text(doc, "Remito interno", recLx + 58, bottomRowY);
 
-  const recRx = B + innerW * 0.46;
   set(doc, "helvetica", "bold", 9);
   text(doc, "Apellido y Nombre / Razón Social:", 150, recY + 18);
-  text(doc, "Domicilio:", recRx, recY + 46);
-  text(doc, "Remito:", recRx, recY + 62);
+  text(doc, "Domicilio:", domLabelX, recY + 46);
+  text(doc, "Remito:", domLabelX, bottomRowY);
   set(doc, "helvetica", "normal", 9);
   const razonLines = wrapByWidth(doc, cl.razon || "Cliente", innerW - (recRx - B) - 12);
   text(doc, razonLines[0] || "", recRx + 30, recY + 18);
   if (razonLines[1]) text(doc, razonLines[1], recRx + 185, recY + 30);
-  text(doc, clampToWidth(doc, cl.dom || "-", innerW - (recRx - B) - 12), recRx + 45, recY + 46);
-  text(doc, clampToWidth(doc, nro, innerW - (recRx - B) - 12), recRx + 45, recY + 62);
+  domicilioLines.forEach((lineTxt, lineIdx) => {
+    text(doc, lineTxt, domValueX, recY + 46 + lineIdx * domLineH);
+  });
+  text(doc, clampToWidth(doc, nro, innerW - (recRx - B) - 12), domLabelX + 45, bottomRowY);
 
   return recY + recH;
 }

@@ -18,6 +18,7 @@ import {
   faListCheck,
 } from "@fortawesome/free-solid-svg-icons";
 import BASE_URL from "../../../config/config";
+import Toast from "../../Global/Toast";
 import "./configTiendanube.css";
 
 const API_RELATIVE = "api.php";
@@ -328,8 +329,7 @@ export default function ConfigTiendaNube() {
   const [loadingImport, setLoadingImport] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const [error, setError] = useState("");
-  const [okMsg, setOkMsg] = useState("");
+  const [toast, setToast] = useState(null);
 
   const [conexion, setConexion] = useState({
     connected: false,
@@ -342,9 +342,17 @@ export default function ConfigTiendaNube() {
     updated_at: "",
   });
 
+  const mostrarToast = useCallback((tipo, mensaje, duracion = 3000) => {
+    setToast({
+      tipo,
+      mensaje: String(mensaje || "").trim() || "Aviso del sistema.",
+      duracion,
+      key: Date.now(),
+    });
+  }, []);
+
   const limpiarMensajes = () => {
-    setError("");
-    setOkMsg("");
+    setToast(null);
   };
 
   const abrirModal = () => setIsModalOpen(true);
@@ -352,7 +360,12 @@ export default function ConfigTiendaNube() {
 
   const cargarEstado = useCallback(async () => {
     setLoading(true);
-    limpiarMensajes();
+
+    if (!tenantId) {
+      setLoading(false);
+      mostrarToast("error", "No se detectó el idTenant en la sesión del usuario.", 4200);
+      return;
+    }
 
     try {
       const res = await apiFetch(
@@ -393,17 +406,17 @@ export default function ConfigTiendaNube() {
         updated_at: c.updated_at || "",
       });
     } catch (e) {
-      setError(e?.message || "Error al cargar la configuración.");
+      mostrarToast("error", e?.message || "Error al cargar la configuración.", 4200);
     } finally {
       setLoading(false);
     }
-  }, [tenantId]);
+  }, [tenantId, mostrarToast]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
 
     if (params.get("tn_connected") === "1") {
-      setOkMsg("Tienda conectada correctamente.");
+      mostrarToast("exito", "Tienda conectada correctamente.");
       params.delete("tn_connected");
     }
 
@@ -413,13 +426,18 @@ export default function ConfigTiendaNube() {
     window.history.replaceState({}, "", next);
 
     cargarEstado();
-  }, [cargarEstado]);
+  }, [cargarEstado, mostrarToast]);
 
   const handleConectar = async () => {
     limpiarMensajes();
     setLoadingConnect(true);
 
     try {
+      if (!tenantId) {
+        mostrarToast("error", "No se encontró el tenant. Volvé a iniciar sesión.", 4200);
+        return;
+      }
+
       const res = await apiFetch(
         {
           action: "tiendanube_connect_url",
@@ -441,7 +459,7 @@ export default function ConfigTiendaNube() {
 
       window.location.href = data.auth_url;
     } catch (e) {
-      setError(e?.message || "No se pudo iniciar la conexión.");
+      mostrarToast("error", e?.message || "No se pudo iniciar la conexión.", 4200);
     } finally {
       setLoadingConnect(false);
     }
@@ -452,6 +470,11 @@ export default function ConfigTiendaNube() {
     setLoadingWebhook(true);
 
     try {
+      if (!tenantId) {
+        mostrarToast("error", "No se encontró el tenant. Volvé a iniciar sesión.", 4200);
+        return;
+      }
+
       const res = await apiFetch(
         {
           action: "tiendanube_configurar_webhooks",
@@ -473,10 +496,10 @@ export default function ConfigTiendaNube() {
         );
       }
 
-      setOkMsg(data?.mensaje || "Webhooks configurados correctamente.");
+      mostrarToast("exito", data?.mensaje || "Webhooks configurados correctamente.");
       await cargarEstado();
     } catch (e) {
-      setError(e?.message || "Error al configurar webhooks.");
+      mostrarToast("error", e?.message || "Error al configurar webhooks.", 4200);
     } finally {
       setLoadingWebhook(false);
     }
@@ -487,6 +510,11 @@ export default function ConfigTiendaNube() {
     setLoadingImport(true);
 
     try {
+      if (!tenantId) {
+        mostrarToast("error", "No se encontró el tenant. Volvé a iniciar sesión.", 4200);
+        return;
+      }
+
       const res = await apiFetch(
         {
           action: "stock_tiendanube_importar_faltantes",
@@ -511,10 +539,10 @@ export default function ConfigTiendaNube() {
         );
       }
 
-      setOkMsg(armarMensajeImportacion(data?.resultado || {}));
+      mostrarToast("exito", armarMensajeImportacion(data?.resultado || {}), 5200);
       await cargarEstado();
     } catch (e) {
-      setError(e?.message || "Error al importar productos y categorías.");
+      mostrarToast("error", e?.message || "Error al importar productos y categorías.", 4200);
     } finally {
       setLoadingImport(false);
     }
@@ -530,7 +558,18 @@ export default function ConfigTiendaNube() {
 
   if (loading) {
     return (
-      <section className="tn-page">
+      <>
+        {toast && (
+          <Toast
+            key={toast.key}
+            tipo={toast.tipo}
+            mensaje={toast.mensaje}
+            duracion={toast.duracion}
+            onClose={() => setToast(null)}
+          />
+        )}
+
+        <section className="tn-page">
         <div className="tn-hero">
           <div className="tn-hero__icon">
             <FontAwesomeIcon icon={faStore} />
@@ -553,12 +592,24 @@ export default function ConfigTiendaNube() {
             </button>
           </div>
         </div>
-      </section>
+        </section>
+      </>
     );
   }
 
   return (
-    <section className="tn-page">
+    <>
+      {toast && (
+        <Toast
+          key={toast.key}
+          tipo={toast.tipo}
+          mensaje={toast.mensaje}
+          duracion={toast.duracion}
+          onClose={() => setToast(null)}
+        />
+      )}
+
+      <section className="tn-page">
       <ModalInstructivo isOpen={isModalOpen} onClose={cerrarModal} />
 
       <div className="tn-topbar" />
@@ -595,16 +646,6 @@ export default function ConfigTiendaNube() {
       </div>
 
       <div className="tn-contentScroll">
-        {!tenantId && (
-        <div className="tn-alert tn-alert--error">
-          No se detectó el <b>idTenant</b> en la sesión del usuario. Revisá el
-          objeto guardado en <code>localStorage.usuario</code>.
-        </div>
-      )}
-
-      {error && <div className="tn-alert tn-alert--error">{error}</div>}
-      {okMsg && <div className="tn-alert tn-alert--success">{okMsg}</div>}
-
       <div className="tn-metaGrid">
         <div className="tn-metaCard">
           <div className="tn-metaCard__top">
@@ -808,6 +849,7 @@ export default function ConfigTiendaNube() {
         </div>
         </div>
       </div>
-    </section>
+      </section>
+    </>
   );
 }

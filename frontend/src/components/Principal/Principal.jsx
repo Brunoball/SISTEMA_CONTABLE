@@ -469,6 +469,67 @@ function hardClientLogoutCleanup() {
   } catch {}
 }
 
+function getLogoToneFromImageSrc(src) {
+  return new Promise((resolve) => {
+    if (!src) {
+      resolve("dark");
+      return;
+    }
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        const size = 56;
+
+        canvas.width = size;
+        canvas.height = size;
+
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx) {
+          resolve("dark");
+          return;
+        }
+
+        ctx.clearRect(0, 0, size, size);
+        ctx.drawImage(img, 0, 0, size, size);
+
+        const { data } = ctx.getImageData(0, 0, size, size);
+
+        let brightnessTotal = 0;
+        let visiblePixels = 0;
+
+        for (let i = 0; i < data.length; i += 4) {
+          const alpha = data[i + 3];
+          if (alpha < 45) continue;
+
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+
+          brightnessTotal += brightness;
+          visiblePixels += 1;
+        }
+
+        if (!visiblePixels) {
+          resolve("dark");
+          return;
+        }
+
+        resolve(brightnessTotal / visiblePixels >= 155 ? "light" : "dark");
+      } catch {
+        resolve("dark");
+      }
+    };
+
+    img.onerror = () => resolve("dark");
+    img.src = src;
+  });
+}
+
 /* =========================
    Outlet memoizado
 ========================= */
@@ -488,6 +549,7 @@ const Principal = () => {
 
   const [tenantLogoIconoSrc, setTenantLogoIconoSrc] = useState("");
   const [tenantLogoIconoLoaded, setTenantLogoIconoLoaded] = useState(false);
+  const [tenantLogoIconoTone, setTenantLogoIconoTone] = useState("dark");
 
   const [tenantLogoPrincipalSrc, setTenantLogoPrincipalSrc] = useState("");
   const [tenantLogoPrincipalLoaded, setTenantLogoPrincipalLoaded] =
@@ -678,6 +740,7 @@ const Principal = () => {
 
         setTenantLogoIconoSrc("");
         setTenantLogoIconoLoaded(false);
+        setTenantLogoIconoTone("dark");
         setTenantLogoPrincipalSrc("");
         setTenantLogoPrincipalLoaded(false);
 
@@ -833,6 +896,25 @@ const Principal = () => {
   useEffect(() => {
     loadTenantLogos();
   }, [loadTenantLogos]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!tenantLogoIconoLoaded || !tenantLogoIconoSrc) {
+      setTenantLogoIconoTone("dark");
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    getLogoToneFromImageSrc(tenantLogoIconoSrc).then((tone) => {
+      if (isMounted) setTenantLogoIconoTone(tone);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [tenantLogoIconoLoaded, tenantLogoIconoSrc]);
 
   useEffect(() => {
     return () => {
@@ -1351,28 +1433,20 @@ const Principal = () => {
           )}
 
           <button
-            className="mov-topbar__usericon"
+            className={`mov-topbar__usericon ${
+              tenantLogoIconoLoaded && tenantLogoIconoSrc
+                ? `mov-topbar__usericon--logo mov-topbar__usericon--logo-${tenantLogoIconoTone}`
+                : ""
+            }`}
             onClick={() => setShowPerfilModal(true)}
             title="Perfil"
-            style={{
-              overflow: "hidden",
-              padding: 8,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
+            aria-label="Abrir perfil"
           >
             {tenantLogoIconoLoaded && tenantLogoIconoSrc ? (
               <img
                 src={tenantLogoIconoSrc}
                 alt="Logo icono de la empresa"
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  display: "block",
-                  objectFit: "cover",
-                  borderRadius: "50%",
-                }}
+                className="mov-topbar__userLogo"
               />
             ) : (
               <FontAwesomeIcon icon={faUserCircle} />

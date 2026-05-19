@@ -194,7 +194,6 @@ export default function ConfiguracionCalendario() {
     getDefaultDiasInput(calendarConfig?.dias_atras, maxDiasAtrasPermitidos)
   );
   const [saving, setSaving] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
   const [toast, setToast] = useState(null);
 
   const diasAtrasNormalizado = useMemo(() => {
@@ -227,15 +226,20 @@ export default function ConfiguracionCalendario() {
     setToast({ id: Date.now(), tipo, mensaje, duracion });
   }, []);
 
+  useEffect(() => {
+    if (!tenantId) {
+      showToast("error", "No se detectó el idTenant en la sesión del usuario.", 4200);
+    }
+  }, [tenantId, showToast]);
+
   const handleSave = useCallback(async () => {
     if (!tenantId) {
-      setErrorMsg("No se encontró el tenant. Volvé a iniciar sesión.");
+      showToast("error", "No se encontró el tenant. Volvé a iniciar sesión.", 4200);
       return;
     }
     const diasNum = diasAtrasNormalizado;
     const cfg = { modo, dias_atras: diasNum };
     setSaving(true);
-    setErrorMsg("");
     setToast(null);
     try {
       const data = await apiFetch(
@@ -247,7 +251,7 @@ export default function ConfiguracionCalendario() {
       setDiasAtrasInput(String(diasNum));
       showToast("exito", "Configuración guardada correctamente.");
     } catch (e) {
-      setErrorMsg(e.message || "Error guardando la configuración.");
+      showToast("error", e.message || "Error guardando la configuración.", 4200);
     } finally {
       setSaving(false);
     }
@@ -257,7 +261,6 @@ export default function ConfiguracionCalendario() {
     (e) => {
       const raw = e.target.value;
       if (!/^\d*$/.test(raw)) return;
-      setErrorMsg("");
       setToast(null);
       if (raw === "") { setDiasAtrasInput(""); return; }
       const n = parseInt(raw, 10);
@@ -275,7 +278,6 @@ export default function ConfiguracionCalendario() {
   const handleModoChange = useCallback(
     (nuevoModo) => {
       setModo(nuevoModo);
-      setErrorMsg("");
       setToast(null);
       if (nuevoModo === "dias_atras") {
         const raw = String(diasAtrasInput ?? "").trim();
@@ -334,16 +336,6 @@ export default function ConfiguracionCalendario() {
         </div>
 
         <div className="cal-contentScroll">
-          {/* ALERTAS */}
-        {!tenantId && (
-          <div className="cal-alert cal-alert--error">
-            No se detectó el <b>idTenant</b> en la sesión del usuario.
-          </div>
-        )}
-        {errorMsg && (
-          <div className="cal-alert cal-alert--error">{errorMsg}</div>
-        )}
-
         {/* GRID */}
         <div className="cal-metaGrid">
 

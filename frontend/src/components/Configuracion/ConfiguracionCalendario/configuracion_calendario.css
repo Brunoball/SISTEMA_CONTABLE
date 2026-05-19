@@ -90,17 +90,6 @@
   justify-self: end;
 }
 
-/* ── ALERTS ── */
-.cal-alert {
-  border-radius: 12px;
-  padding: 10px 12px;
-  font-size: 12px;
-  font-weight: 560;
-}
-
-.cal-alert--error   { background: #fff4f4; color: #a12c2c; border: 1px solid #f0cccc; }
-.cal-alert--success { background: #eef8f1; color: #237545; border: 1px solid #d4eadc; }
-
 /* ── GRID DE TARJETAS — 2 columnas ── */
 .cal-metaGrid {
   display: grid;

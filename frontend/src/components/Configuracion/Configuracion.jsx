@@ -6,6 +6,7 @@ import BASE_URL from "../../config/config";
 import logoTiendaNube from "../../imagenes/logo_tienda_nube.png";
 import "./configuracion.css";
 import "../Global/Global_css/Global_oscuro.css";
+import Toast from "../Global/Toast";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -133,7 +134,16 @@ export default function Configuracion() {
   );
   const esPlanBasico = planIdUsuario === 1;
   const esPlanDemo = isBaltoDemoMode(usuario);
-  const [demoNotice, setDemoNotice] = useState("");
+  const [toast, setToast] = useState(null);
+
+  const mostrarToast = useCallback((tipo, mensaje, duracion = 3800) => {
+    setToast({
+      tipo,
+      mensaje: String(mensaje || "").trim() || "Aviso del sistema.",
+      duracion,
+      key: Date.now(),
+    });
+  }, []);
 
   // ── estado Tienda Nube ─────────────────────────────────────────────────
   const [tiendanube, setTiendanube] = useState({
@@ -274,18 +284,20 @@ export default function Configuracion() {
   }, [tiendanube, datosLegales, calendarConfig, configLoaded, esPlanBasico, esPlanDemo]);
 
   return (
-    <section className="cfg-page">
+    <>
+      {toast && (
+        <Toast
+          key={toast.key}
+          tipo={toast.tipo}
+          mensaje={toast.mensaje}
+          duracion={toast.duracion}
+          onClose={() => setToast(null)}
+        />
+      )}
+
+      <section className="cfg-page">
       <div className="cfg-contentScroll">
-        {esPlanDemo && (
-          <div className="cfg-demoNotice" role="status">
-            Estás en modo demo. Las cajas de Tienda Nube y Datos legales se muestran para presentación, pero no se pueden abrir ni configurar.
-          </div>
-        )}
-        {demoNotice && (
-          <div className="cfg-demoNotice cfg-demoNotice--warning" role="alert">
-            {demoNotice}
-          </div>
-        )}
+
         <div className="cfg-cards">
         {cards.map((card) => (
           <div key={card.id} className="cfg-cardWrap">
@@ -296,7 +308,11 @@ export default function Configuracion() {
               title={card.demoBlocked ? "Bloqueado en modo demo" : undefined}
               onClick={() => {
                 if (card.demoBlocked) {
-                  setDemoNotice(card.demoMessage || DEMO_BLOCK_MESSAGE);
+                  mostrarToast(
+                    "advertencia",
+                    card.demoMessage || DEMO_BLOCK_MESSAGE,
+                    4600
+                  );
                   return;
                 }
                 navigate(card.route);
@@ -338,6 +354,7 @@ export default function Configuracion() {
         ))}
         </div>
       </div>
-    </section>
+      </section>
+    </>
   );
 }

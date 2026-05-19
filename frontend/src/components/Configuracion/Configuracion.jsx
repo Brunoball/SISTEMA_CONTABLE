@@ -20,6 +20,7 @@ import { useDateRange } from "../../context/DateRangeContext";
 import { DEMO_BLOCK_MESSAGE, isBaltoDemoMode, normalizeBaltoPlanId } from "../../utils/demoMode";
 
 const API_RELATIVE = "api.php";
+const DEMO_ADVANCED_MESSAGE = "Funcionalidad disponible únicamente en planes avanzados.";
 
 function buildApiUrl(paramsObj = {}) {
   const baseRaw = String(BASE_URL || "").trim();
@@ -221,7 +222,7 @@ export default function Configuracion() {
         "Conectá tu tienda y configurá la sincronización con una interfaz simple.",
       route: "/panel/configuracion/tiendanube",
       demoBlocked: esPlanDemo,
-      demoMessage: "Modo demo: Tienda Nube se muestra para que el cliente vea la opción, pero no se puede configurar ni conectar desde una cuenta demo.",
+      demoMessage: DEMO_ADVANCED_MESSAGE,
       status: esPlanDemo ? { text: "Bloqueado demo", type: "warning" } : tiendaNubeEstado,
       metaTop: tiendanube.connected ? "Conexión activa" : "Sin conexión",
       metaBottom: tiendanube.store_id
@@ -243,7 +244,11 @@ export default function Configuracion() {
         title: "Usuarios del sistema",
         description: "Creá usuarios y asigná roles para limitar el acceso a cada empleado.",
         route: "/panel/configuracion/usuarios",
-        status: { text: "Administrable", type: "success" },
+        demoBlocked: esPlanDemo,
+        demoMessage: DEMO_ADVANCED_MESSAGE,
+        status: esPlanDemo
+          ? { text: "Bloqueado demo", type: "warning" }
+          : { text: "Administrable", type: "success" },
         metaTop: "Roles activos",
         metaBottom: "Administrador / Empleado básico",
         icon: (
@@ -259,7 +264,7 @@ export default function Configuracion() {
           "Actualizá razón social, CUIT, condición fiscal, domicilio y datos de facturación.",
         route: "/panel/configuracion/datos-legales",
         demoBlocked: esPlanDemo,
-        demoMessage: "Modo demo: los datos legales se ven como opción, pero no se pueden editar ni abrir para evitar cambios fiscales reales.",
+        demoMessage: DEMO_ADVANCED_MESSAGE,
         status: esPlanDemo ? { text: "Bloqueado demo", type: "warning" } : (datosLegales.razon_social ? { text: "Configurado", type: "success" } : { text: "Pendiente", type: "pending" }),
         metaTop: datosLegales.razon_social || "Sin razón social",
         metaBottom: datosLegales.cuit ? `CUIT: ${datosLegales.cuit}` : "CUIT sin cargar",

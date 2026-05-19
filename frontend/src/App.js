@@ -268,6 +268,18 @@ function RutaPlanPro({ children }) {
   );
 }
 
+function RutaNoDemoConfig({ children }) {
+  if (!isAuthenticated()) return <Navigate to="/" replace />;
+
+  // En DEMO la configuración queda visible como vista previa,
+  // pero solo Calendario global debe ser navegable/editable.
+  return getPlanIdUsuario() === 3 ? (
+    <Navigate to="/panel/configuracion" replace />
+  ) : (
+    children
+  );
+}
+
 function PanelIndexRedirect() {
   return <Navigate to="dashboard" replace />;
 }
@@ -555,7 +567,9 @@ export default function App() {
             element={
               <RutaModulo modulo="configuracion">
                 <RutaAdmin>
-                  <ConfiguracionUsuarios />
+                  <RutaNoDemoConfig>
+                    <ConfiguracionUsuarios />
+                  </RutaNoDemoConfig>
                 </RutaAdmin>
               </RutaModulo>
             }
@@ -566,7 +580,9 @@ export default function App() {
             element={
               <RutaModulo modulo="configuracion">
                 <RutaAdmin>
-                  <ConfiguracionDatosLegales />
+                  <RutaNoDemoConfig>
+                    <ConfiguracionDatosLegales />
+                  </RutaNoDemoConfig>
                 </RutaAdmin>
               </RutaModulo>
             }

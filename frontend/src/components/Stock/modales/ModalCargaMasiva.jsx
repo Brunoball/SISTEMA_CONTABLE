@@ -6,6 +6,7 @@ import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComproban
 import ModalCargaIndividualProducto from "./ModalCargaIndividualProducto";
 import { useListas } from "../../../context/ListasContext";
 import Toast from "../../Global/Toast.jsx";
+import { isBaltoDemoMode } from "../../../utils/demoMode";
 
 import {
   faBoxOpen,
@@ -49,6 +50,7 @@ import {
 } from "./stockFormUtils";
 
 const EXTENSIONES_IMAGEN = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff", "tif"];
+const DEMO_CARGA_MASIVA_MESSAGE = "La carga masiva está disponible únicamente en cuentas activas con plan avanzado.";
 
 function errorToText(error, fallback = "Ocurrió un error inesperado") {
   if (!error) return fallback;
@@ -1060,6 +1062,7 @@ export default function ModalCargaMasiva({
   const [confirmandoDetectados, setConfirmandoDetectados] = useState(false);
 
   const isLoading = individualLoading || subiendo || clasificando || confirmandoDetectados;
+  const esModoDemo = isBaltoDemoMode();
 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState("");
@@ -1128,6 +1131,15 @@ export default function ModalCargaMasiva({
     if (!open) return;
     ensureListsLoaded?.({ force: false, background: true });
   }, [open, ensureListsLoaded]);
+
+  useEffect(() => {
+    if (!open || !esModoDemo) return;
+    if (tab !== "individual") {
+      setTab("individual");
+      resetMasivo();
+      cerrarModalConfirmacion();
+    }
+  }, [open, esModoDemo, tab]);
 
   function resetMasivo() {
     setArchivo(null);
@@ -1613,25 +1625,39 @@ export default function ModalCargaMasiva({
             {[
               { key: "individual", icon: faBoxOpen, label: "Individual" },
               { key: "masivo", icon: faCloudArrowUp, label: "Carga masiva" },
-            ].map(({ key, icon, label }) => (
-              <button
-                key={key}
-                onClick={() => { setTab(key); cerrarModalConfirmacion(); }}
-                type="button"
-                style={{
-                  display: "flex", alignItems: "center", gap: 7,
-                  padding: "11px 16px", border: "none",
-                  borderBottom: tab === key ? "2px solid var(--nv-action)" : "2px solid transparent",
-                  background: "none", cursor: "pointer",
-                  fontWeight: tab === key ? 700 : 400,
-                  color: tab === key ? "var(--nv-action)" : "var(--nv-muted)",
-                  fontSize: "0.88rem", transition: "all .15s", fontFamily: "inherit",
-                }}
-              >
-                <FontAwesomeIcon icon={icon} style={{ fontSize: 13 }} />
-                {label}
-              </button>
-            ))}
+            ].map(({ key, icon, label }) => {
+              const bloqueadoDemo = esModoDemo && key === "masivo";
+
+              return (
+                <button
+                  key={key}
+                  onClick={() => {
+                    if (bloqueadoDemo) {
+                      mostrarToast(DEMO_CARGA_MASIVA_MESSAGE, "advertencia");
+                      return;
+                    }
+                    setTab(key);
+                    cerrarModalConfirmacion();
+                  }}
+                  type="button"
+                  aria-disabled={bloqueadoDemo ? "true" : undefined}
+                  title={bloqueadoDemo ? "Bloqueado en modo demo" : undefined}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 7,
+                    padding: "11px 16px", border: "none",
+                    borderBottom: tab === key ? "2px solid var(--nv-action)" : "2px solid transparent",
+                    background: "none", cursor: bloqueadoDemo ? "not-allowed" : "pointer",
+                    fontWeight: tab === key ? 700 : 400,
+                    color: tab === key ? "var(--nv-action)" : "var(--nv-muted)",
+                    opacity: bloqueadoDemo ? 0.55 : 1,
+                    fontSize: "0.88rem", transition: "all .15s", fontFamily: "inherit",
+                  }}
+                >
+                  <FontAwesomeIcon icon={icon} style={{ fontSize: 13 }} />
+                  {label}
+                </button>
+              );
+            })}
           </div>
 
           {/* ── TAB INDIVIDUAL ── */}

@@ -170,10 +170,6 @@ const ROUTE_PREFETCH = {
     import("../Mov_Subsection/Documentos_Comerciales/Presupuestos"),
   "/panel/presupuesto": () =>
     import("../Mov_Subsection/Documentos_Comerciales/Presupuestos"),
-  "/panel/facturacion": () =>
-    import("../Mov_Subsection/Documentos_Comerciales/Facturas"),
-  "/panel/remitos": () =>
-    import("../Mov_Subsection/Documentos_Comerciales/Remitos"),
   "/panel/compras": () => import("../Mov_Subsection/Compra/Compras"),
   "/panel/recibos": () => import("../Mov_Subsection/Recibos/Recibos"),
   "/panel/OrdenesPago": () =>
@@ -367,8 +363,10 @@ function normalizePlanNivel(value) {
   return 3;
 }
 
-function normalizePlanId(value) {
+function normalizePlanId(value, planName = "") {
   const n = Number(value);
+  const name = String(planName || "").trim().toLowerCase();
+  if (n === 3 || name.includes("demo")) return 3;
   return n === 2 ? 2 : 1;
 }
 
@@ -377,14 +375,15 @@ const PLAN_BASICO_NAV_KEYS = new Set([
   "movimientos",
   "flujo-de-caja",
   "cuentas-corrientes",
+  "stock",
   "configuracion",
 ]);
 
 function planAllowsNavKey(planId, key) {
   const id = normalizePlanId(planId);
 
-  // Plan 2 = PRO: todo habilitado.
-  if (id === 2) return true;
+  // Plan 2 = PRO y Plan 3 = DEMO: todo visible en navegación.
+  if (id === 2 || id === 3) return true;
 
   // Plan 1 = BÁSICO: solo módulos principales.
   return PLAN_BASICO_NAV_KEYS.has(String(key || ""));
@@ -406,9 +405,7 @@ function getModuleKeyByPath(pathname) {
     path.startsWith("/panel/Otrosingresos") ||
     path.startsWith("/panel/Otrosegresos") ||
     path.startsWith("/panel/documentos_comerciales") ||
-    path.startsWith("/panel/facturacion") ||
-    path.startsWith("/panel/presupuesto") ||
-    path.startsWith("/panel/remitos")
+    path.startsWith("/panel/presupuesto")
   ) {
     return "movimientos";
   }
@@ -472,6 +469,67 @@ function hardClientLogoutCleanup() {
   } catch {}
 }
 
+function getLogoToneFromImageSrc(src) {
+  return new Promise((resolve) => {
+    if (!src) {
+      resolve("dark");
+      return;
+    }
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        const size = 56;
+
+        canvas.width = size;
+        canvas.height = size;
+
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx) {
+          resolve("dark");
+          return;
+        }
+
+        ctx.clearRect(0, 0, size, size);
+        ctx.drawImage(img, 0, 0, size, size);
+
+        const { data } = ctx.getImageData(0, 0, size, size);
+
+        let brightnessTotal = 0;
+        let visiblePixels = 0;
+
+        for (let i = 0; i < data.length; i += 4) {
+          const alpha = data[i + 3];
+          if (alpha < 45) continue;
+
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+
+          brightnessTotal += brightness;
+          visiblePixels += 1;
+        }
+
+        if (!visiblePixels) {
+          resolve("dark");
+          return;
+        }
+
+        resolve(brightnessTotal / visiblePixels >= 155 ? "light" : "dark");
+      } catch {
+        resolve("dark");
+      }
+    };
+
+    img.onerror = () => resolve("dark");
+    img.src = src;
+  });
+}
+
 /* =========================
    Outlet memoizado
 ========================= */
@@ -491,6 +549,7 @@ const Principal = () => {
 
   const [tenantLogoIconoSrc, setTenantLogoIconoSrc] = useState("");
   const [tenantLogoIconoLoaded, setTenantLogoIconoLoaded] = useState(false);
+  const [tenantLogoIconoTone, setTenantLogoIconoTone] = useState("dark");
 
   const [tenantLogoPrincipalSrc, setTenantLogoPrincipalSrc] = useState("");
   const [tenantLogoPrincipalLoaded, setTenantLogoPrincipalLoaded] =
@@ -681,6 +740,7 @@ const Principal = () => {
 
         setTenantLogoIconoSrc("");
         setTenantLogoIconoLoaded(false);
+        setTenantLogoIconoTone("dark");
         setTenantLogoPrincipalSrc("");
         setTenantLogoPrincipalLoaded(false);
 
@@ -797,8 +857,12 @@ const Principal = () => {
 
       if (u) {
         u.rol = normalizeRol(u.rol);
-        u.idPlan = normalizePlanId(u.idPlan ?? u.id_plan ?? u.plan_id ?? u.plan_nivel ?? 1);
+        u.idPlan = normalizePlanId(
+          u.idPlan ?? u.id_plan ?? u.plan_id ?? u.plan_nivel ?? 1,
+          u.plan_nombre ?? u.plan ?? u.nombre_plan ?? ""
+        );
         u.plan_nivel = normalizePlanNivel(u.plan_nivel ?? u.idPlan ?? 1);
+        if (u.idPlan === 3) u.plan_nivel = 3;
         u.tema = normalizeTema(u.tema ?? "claro");
       }
 
@@ -832,6 +896,25 @@ const Principal = () => {
   useEffect(() => {
     loadTenantLogos();
   }, [loadTenantLogos]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!tenantLogoIconoLoaded || !tenantLogoIconoSrc) {
+      setTenantLogoIconoTone("dark");
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    getLogoToneFromImageSrc(tenantLogoIconoSrc).then((tone) => {
+      if (isMounted) setTenantLogoIconoTone(tone);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [tenantLogoIconoLoaded, tenantLogoIconoSrc]);
 
   useEffect(() => {
     return () => {
@@ -933,7 +1016,8 @@ const Principal = () => {
   );
 
   const planIdUsuario = normalizePlanId(
-    usuario?.idPlan ?? usuario?.id_plan ?? usuario?.plan_id ?? usuario?.plan_nivel ?? 1
+    usuario?.idPlan ?? usuario?.id_plan ?? usuario?.plan_id ?? usuario?.plan_nivel ?? 1,
+    usuario?.plan_nombre ?? usuario?.plan ?? usuario?.nombre_plan ?? ""
   );
 
   const puedeVerConfiguracion = rolUsuario === "admin";
@@ -984,8 +1068,7 @@ const Principal = () => {
           { label: "Otros Ingresos", ruta: "/panel/Otrosingresos" },
           { label: "Otros Egresos", ruta: "/panel/Otrosegresos" },
           { label: "Presupuestos", ruta: "/panel/presupuesto" },
-          { label: "Facturas", ruta: "/panel/facturacion" },
-          { label: "Remitos", ruta: "/panel/remitos" },
+
         ],
       },
       { label: "Flujo de Caja", ruta: "/panel/flujo-de-caja" },
@@ -1070,9 +1153,7 @@ const Principal = () => {
       location.pathname.startsWith("/panel/Otrosingresos") ||
       location.pathname.startsWith("/panel/Otrosegresos") ||
       location.pathname.startsWith("/panel/documentos_comerciales") ||
-      location.pathname.startsWith("/panel/facturacion") ||
-      location.pathname.startsWith("/panel/presupuesto") ||
-      location.pathname.startsWith("/panel/remitos")
+      location.pathname.startsWith("/panel/presupuesto")
     ) {
       return "movimientos";
     }
@@ -1100,9 +1181,8 @@ const Principal = () => {
       location.pathname.startsWith("/panel/Otrosingresos") ||
       location.pathname.startsWith("/panel/Otrosegresos") ||
       location.pathname.startsWith("/panel/documentos_comerciales") ||
-      location.pathname.startsWith("/panel/facturacion") ||
-      location.pathname.startsWith("/panel/presupuesto") ||
-      location.pathname.startsWith("/panel/remitos")
+
+      location.pathname.startsWith("/panel/presupuesto")
     ) {
       return "Movimientos";
     }
@@ -1242,6 +1322,38 @@ const Principal = () => {
     [closeAllSubs]
   );
 
+  const handleNavItemClick = useCallback(
+    (item, hasSub, isOpen) => {
+      prefetchRoute(item.ruta);
+
+      if (!hasSub) {
+        handleNavigate(item.ruta);
+        return;
+      }
+
+      /*
+        En escritorio se mantiene el comportamiento de siempre:
+        click abre/cierra y doble click entra a la ruta principal.
+
+        En celular el doble click/tap no es confiable, por eso cuando el
+        drawer está abierto el segundo toque sobre el grupo abierto navega
+        a la ruta principal/default del módulo.
+      */
+      if (drawerOpen && isOpen) {
+        handleNavigate(DEFAULT_SUBROUTES[item.key] || item.ruta);
+        return;
+      }
+
+      toggleSubmenu(item.key, isOpen);
+    },
+    [
+      DEFAULT_SUBROUTES,
+      drawerOpen,
+      handleNavigate,
+      toggleSubmenu,
+    ]
+  );
+
   return (
     <div className="pp-shell">
       <header className="mov-topbar">
@@ -1321,28 +1433,20 @@ const Principal = () => {
           )}
 
           <button
-            className="mov-topbar__usericon"
+            className={`mov-topbar__usericon ${
+              tenantLogoIconoLoaded && tenantLogoIconoSrc
+                ? `mov-topbar__usericon--logo mov-topbar__usericon--logo-${tenantLogoIconoTone}`
+                : ""
+            }`}
             onClick={() => setShowPerfilModal(true)}
             title="Perfil"
-            style={{
-              overflow: "hidden",
-              padding: 8,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
+            aria-label="Abrir perfil"
           >
             {tenantLogoIconoLoaded && tenantLogoIconoSrc ? (
               <img
                 src={tenantLogoIconoSrc}
                 alt="Logo icono de la empresa"
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  display: "block",
-                  objectFit: "cover",
-                  borderRadius: "50%",
-                }}
+                className="mov-topbar__userLogo"
               />
             ) : (
               <FontAwesomeIcon icon={faUserCircle} />
@@ -1431,9 +1535,7 @@ const Principal = () => {
                   location.pathname.startsWith("/panel/Otrosingresos") ||
                   location.pathname.startsWith("/panel/Otrosegresos") ||
                   location.pathname.startsWith("/panel/documentos_comerciales") ||
-                  location.pathname.startsWith("/panel/facturacion") ||
-                  location.pathname.startsWith("/panel/presupuesto") ||
-                  location.pathname.startsWith("/panel/remitos"))) ||
+                  location.pathname.startsWith("/panel/presupuesto"))) ||
               (isCC &&
                 location.pathname.startsWith("/panel/cuentas-corrientes")) ||
               (isCheques && location.pathname.startsWith("/panel/cheques")) ||
@@ -1460,21 +1562,7 @@ const Principal = () => {
     if (!hasSub) return;
     handleNavigate(DEFAULT_SUBROUTES[item.key] || item.ruta);
   }}
-  onClick={() => {
-    prefetchRoute(item.ruta);
-
-    if (hasSub) {
-      if (isOpen) {
-        closeAllSubs();
-        return;
-      }
-
-      toggleSubmenu(item.key, isOpen);
-      return;
-    }
-
-    handleNavigate(item.ruta);
-  }}
+  onClick={() => handleNavItemClick(item, hasSub, isOpen)}
   aria-expanded={hasSub ? isOpen : undefined}
   aria-haspopup={hasSub ? "menu" : undefined}
 >
@@ -1498,7 +1586,7 @@ const Principal = () => {
                         }`}
                         onMouseEnter={() => prefetchRoute(sub.ruta)}
                         onClick={() => {
-
+                          closeAllSubs();
                           navigate(sub.ruta);
                           setDrawerOpen(false);
                         }}

@@ -242,7 +242,7 @@ function FiscalEditableFields({ fiscal, cuit, saving, fiscalLoading, onFieldChan
       </p>
 
       <div className="cc-legal-edit-card__grid">
-        <div className="fl-field cc-legal-edit-card__field cc-legal-edit-card__field--full">
+        <div className="fl-field cc-legal-edit-card__field cc-legal-edit-card__field--full is-active">
           <input
             type="text"
             className="fl-input"
@@ -254,7 +254,7 @@ function FiscalEditableFields({ fiscal, cuit, saving, fiscalLoading, onFieldChan
           <label className="fl-label">Razón social legal *</label>
         </div>
 
-        <div className="fl-field cc-legal-edit-card__field cc-legal-edit-card__field--full">
+        <div className="fl-field cc-legal-edit-card__field cc-legal-edit-card__field--full is-active">
           <input
             type="text"
             className="fl-input"
@@ -266,7 +266,7 @@ function FiscalEditableFields({ fiscal, cuit, saving, fiscalLoading, onFieldChan
           <label className="fl-label">Condición IVA</label>
         </div>
 
-        <div className="fl-field cc-legal-edit-card__field cc-legal-edit-card__field--full">
+        <div className="fl-field cc-legal-edit-card__field cc-legal-edit-card__field--full is-active">
           <textarea
             className="fl-input cc-legal-edit-card__textarea"
             placeholder=" "

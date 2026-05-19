@@ -39,11 +39,20 @@ function moneyARS(v) {
   }
 }
 
-function moneyToneClass(value) {
+function saldoProveedorToneClass(value) {
   const n = Number(value || 0);
-  if (n < 0) return "cc-money cc-money--negative";
-  if (n > 0) return "cc-money cc-money--positive";
+  if (n > 0) return "cc-money cc-money--negative";
+  if (n < 0) return "cc-money cc-money--positive";
   return "cc-money cc-money--neutral";
+}
+
+function saldoTotalProveedorToneClass(totales) {
+  const debito = Number(totales?.debito || 0);
+  const credito = Number(totales?.credito || 0);
+
+  if (debito > credito) return "cc-money cc-money--negative";
+  if (credito > debito) return "cc-money cc-money--positive";
+  return saldoProveedorToneClass(totales?.saldo);
 }
 
 function saldoMovimientoToneClass(row) {
@@ -53,7 +62,7 @@ function saldoMovimientoToneClass(row) {
   if (debito > 0 && credito <= 0) return "cc-money cc-money--negative";
   if (credito > 0 && debito <= 0) return "cc-money cc-money--positive";
 
-  return moneyToneClass(row?.saldo);
+  return saldoProveedorToneClass(row?.saldo);
 }
 
 function formatDateISO(d) {
@@ -897,7 +906,7 @@ export default function ProveedoresCC() {
                     <span className="mov-ellipsissss mov-ellipsialingf">{r.nombre || "-"}</span>
                   </div>
                   <div className="mov-gridCell is-right is-strong">
-                    <span className={`mov-ellipsissss ${moneyToneClass(r.saldo)}`}>{moneyARS(r.saldo || 0)}</span>
+                    <span className={`mov-ellipsissss ${saldoProveedorToneClass(r.saldo)}`}>{moneyARS(r.saldo || 0)}</span>
                   </div>
                 </button>
               ))
@@ -1025,7 +1034,7 @@ export default function ProveedoresCC() {
               <div className="mov-gridCell mov-gridCellf is-right is-strong cc-money cc-money--positive">
                 {moneyARS(totales?.credito || 0)}
               </div>
-              <div className={`mov-gridCell mov-gridCellf is-right is-strong ${moneyToneClass(totales?.saldo)}`}>
+              <div className={`mov-gridCell mov-gridCellf is-right is-strong ${saldoTotalProveedorToneClass(totales)}`}>
                 {moneyARS(totales?.saldo || 0)}
               </div>
               <div className="mov-gridCell vacio mov-gridCellf"></div>

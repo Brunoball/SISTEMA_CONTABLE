@@ -2447,3 +2447,87 @@ body.dark .cc-legal-client-empty{
     justify-content: center;
   }
 }
+
+/* =========================================================
+   Fix ARCA: campos legales editables
+   Evita que los labels queden como bloques claros dentro del input
+   cuando se cargan datos fiscales desde ARCA, especialmente en modo oscuro.
+   ========================================================= */
+.cc-legal-edit-card__field{
+  position: relative;
+  min-width: 0;
+}
+
+.cc-legal-edit-card__field .fl-input{
+  width: 100%;
+  min-height: 44px;
+  border-radius: 13px !important;
+  border: 1px solid rgba(10, 37, 64, .16) !important;
+  background: rgba(255, 255, 255, .92) !important;
+  color: var(--nv-text, #0f172a) !important;
+  -webkit-text-fill-color: var(--nv-text, #0f172a) !important;
+  box-shadow: none !important;
+  opacity: 1 !important;
+}
+
+.cc-legal-edit-card__field .fl-label{
+  color: var(--nv-muted, #64748b) !important;
+  background: linear-gradient(180deg, rgba(248, 250, 252, .98), rgba(255, 255, 255, .96)) !important;
+  padding: 0 7px !important;
+  opacity: 1 !important;
+  pointer-events: none;
+}
+
+.cc-legal-edit-card__field.is-active .fl-label,
+.cc-legal-edit-card__field:focus-within .fl-label,
+.cc-legal-edit-card__field:has(.fl-input:not(:placeholder-shown)) .fl-label{
+  color: var(--b-action, #0055bb) !important;
+}
+
+.cc-legal-edit-card__field .fl-input:focus{
+  border-color: rgba(0, 85, 187, .42) !important;
+  box-shadow: 0 0 0 3px rgba(0, 85, 187, .12) !important;
+}
+
+.cc-legal-edit-card__field .fl-input:disabled{
+  cursor: not-allowed;
+  background: rgba(248, 250, 252, .86) !important;
+  color: rgba(15, 23, 42, .82) !important;
+  -webkit-text-fill-color: rgba(15, 23, 42, .82) !important;
+}
+
+html[data-theme="oscuro"] .cc-legal-edit-card__field .fl-input,
+body.dark .cc-legal-edit-card__field .fl-input{
+  background: rgba(15, 23, 42, .32) !important;
+  border-color: rgba(226, 232, 240, .18) !important;
+  color: rgba(241, 245, 249, .94) !important;
+  -webkit-text-fill-color: rgba(241, 245, 249, .94) !important;
+}
+
+
+
+html[data-theme="oscuro"] .cc-legal-edit-card__field:focus-within .fl-label,
+html[data-theme="oscuro"] .cc-legal-edit-card__field:has(.fl-input:not(:placeholder-shown)) .fl-label,
+body.dark .cc-legal-edit-card__field:focus-within .fl-label,
+body.dark .cc-legal-edit-card__field:has(.fl-input:not(:placeholder-shown)) .fl-label{
+  color: #93c5fd !important;
+}
+
+html[data-theme="oscuro"] .cc-legal-edit-card__field .fl-input:focus,
+body.dark .cc-legal-edit-card__field .fl-input:focus{
+  border-color: rgba(147, 197, 253, .45) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, .16) !important;
+}
+
+html[data-theme="oscuro"] .cc-legal-edit-card__field .fl-input:disabled,
+body.dark .cc-legal-edit-card__field .fl-input:disabled{
+  background: rgba(15, 23, 42, .24) !important;
+  color: rgba(226, 232, 240, .78) !important;
+  -webkit-text-fill-color: rgba(226, 232, 240, .78) !important;
+}
+html[data-theme="oscuro"] .cc-legal-edit-card__field .fl-label,
+body.dark .cc-legal-edit-card__field .fl-label{
+  background:transparent !important;
+  color: rgba(226, 232, 240, .72) !important;
+}
+

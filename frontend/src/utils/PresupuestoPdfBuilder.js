@@ -113,20 +113,76 @@ function clampToWidth(doc, value, maxW) {
 
 function wrapByWidth(doc, value, maxW) {
   const t = sanitizePdfText(value);
+  const limit = Math.max(1, Number(maxW) || 0);
   if (!t) return [];
-  const words = t.split(" ");
+
+  const safeTextWidth = (txt) => doc.getTextWidth(sanitizePdfText(txt));
+  const fits = (txt) => safeTextWidth(txt) <= limit;
   const lines = [];
-  let cur = "";
-  for (const w of words) {
-    const test = cur ? `${cur} ${w}` : w;
-    if (doc.getTextWidth(test) <= maxW) cur = test;
-    else {
-      if (cur) lines.push(cur);
-      cur = w;
+
+  // Primero separa por espacios, pero también deja cortes naturales después de comas,
+  // guiones, barras y punto y coma. Esto evita casos pegados como "MACACHA,BOULEVARD".
+  const normalized = t
+    .replace(/([,;/-])/g, "$1 ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const words = normalized.split(" ").filter(Boolean);
+  let current = "";
+
+  const pushBroken = (chunk) => {
+    let rest = sanitizePdfText(chunk).trim();
+    while (rest) {
+      if (fits(rest)) {
+        lines.push(rest);
+        return;
+      }
+
+      let low = 1;
+      let high = rest.length;
+      let best = 1;
+      while (low <= high) {
+        const mid = Math.floor((low + high) / 2);
+        if (fits(rest.slice(0, mid))) {
+          best = mid;
+          low = mid + 1;
+        } else {
+          high = mid - 1;
+        }
+      }
+
+      const part = rest.slice(0, best).trim();
+      if (part) lines.push(part);
+      rest = rest.slice(best).trim();
     }
-  }
-  if (cur) lines.push(cur);
-  return lines;
+  };
+
+  words.forEach((word) => {
+    const next = current ? `${current} ${word}` : word;
+    if (fits(next)) {
+      current = next;
+      return;
+    }
+    if (current) {
+      lines.push(current.trim());
+      current = "";
+    }
+    if (fits(word)) {
+      current = word;
+    } else {
+      pushBroken(word);
+    }
+  });
+
+  if (current) lines.push(current.trim());
+  return lines.length ? lines : [t];
+}
+
+function getWidthUntil(x, maxX, gap = 8) {
+  const from = Number(x);
+  const to = Number(maxX);
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return 1;
+  return Math.max(1, to - from - gap);
 }
 
 function buildApiUrl(paramsObj) {
@@ -303,14 +359,26 @@ function drawHeader(doc, data, logoDataUrl) {
   const W = doc.internal.pageSize.getWidth();
   const B = 10;
   const innerW = W - B * 2;
+  const rightPageX = B + innerW;
   const em = getEmisor(data);
   const cl = getCliente(data);
   const headerY = B + 28;
-  const headerH = 132;
   const splitX = B + innerW * 0.52;
   const letterBoxW = 50;
   const letterBoxH = 50;
   const letterX = splitX - letterBoxW / 2;
+
+  const leftLabelX = B + 18;
+  const leftValueX = B + 112;
+  const leftValueMaxX = splitX - 14;
+  const leftValueW = getWidthUntil(leftValueX, leftValueMaxX, 0);
+  const leftInfoY = headerY + 80;
+  const emDomLineH = 11;
+
+  set(doc, "helvetica", "normal", 8.6);
+  const emDomicilioLines = wrapByWidth(doc, em.dom || "-", leftValueW).slice(0, 3);
+  const emDomicilioExtraH = Math.max(0, emDomicilioLines.length - 1) * emDomLineH;
+  const headerH = 132 + emDomicilioExtraH;
 
   set(doc, "helvetica", "bold", 14);
   text(doc, "ORIGINAL", W / 2, B + 18, { align: "center" });
@@ -329,18 +397,19 @@ function drawHeader(doc, data, logoDataUrl) {
 
   drawLogoOrFallback(doc, logoDataUrl, em, B, headerY, splitX - B);
 
-  const leftLabelX = B + 18;
-  const leftValueX = B + 112;
-  const leftValueW = splitX - leftValueX - 14;
-  const leftInfoY = headerY + 80;
+  const emDomY = leftInfoY + 16;
+  const emIvaY = emDomY + 16 + emDomicilioExtraH;
+
   set(doc, "helvetica", "bold", 8.6);
   text(doc, "Razón Social:", leftLabelX, leftInfoY);
-  text(doc, "Domicilio:", leftLabelX, leftInfoY + 16);
-  text(doc, "Condición IVA:", leftLabelX, leftInfoY + 32);
+  text(doc, "Domicilio:", leftLabelX, emDomY);
+  text(doc, "Condición IVA:", leftLabelX, emIvaY);
   set(doc, "helvetica", "normal", 8.6);
   text(doc, clampToWidth(doc, em.razon || "-", leftValueW), leftValueX, leftInfoY);
-  text(doc, clampToWidth(doc, em.dom || "-", leftValueW), leftValueX, leftInfoY + 16);
-  text(doc, clampToWidth(doc, em.iva || "-", leftValueW), leftValueX, leftInfoY + 32);
+  emDomicilioLines.forEach((lineTxt, lineIdx) => {
+    text(doc, lineTxt, leftValueX, emDomY + lineIdx * emDomLineH);
+  });
+  text(doc, clampToWidth(doc, em.iva || "-", leftValueW), leftValueX, emIvaY);
 
   const rightX = splitX + 22;
   const rightW = W - B - rightX - 18;
@@ -368,18 +437,34 @@ function drawHeader(doc, data, logoDataUrl) {
   });
 
   const clientY = headerY + headerH;
-  const clientH = 54;
+  const recLx = B + 18;
+  const domLabelX = splitX - 20;
+  const domValueX = domLabelX + 46;
+  const ivaValueX = splitX + 84;
+  const rightLimit = rightPageX - 10;
+  const domValueMaxW = Math.max(80, rightLimit - domValueX - 6);
+  const ivaValueMaxW = Math.max(80, rightLimit - ivaValueX - 6);
+  const domLineH = 11;
+
+  set(doc, "helvetica", "normal", 9);
+  const domicilioLines = wrapByWidth(doc, cl.dom || "-", domValueMaxW);
+  const domicilioExtraH = Math.max(0, domicilioLines.length - 1) * domLineH;
+  const clientH = 54 + domicilioExtraH;
+
   rect(doc, B, clientY, innerW, clientH, 0.55);
   set(doc, "helvetica", "bold", 9);
-  text(doc, "Cliente:", B + 18, clientY + 20);
-  text(doc, "CUIT/DNI:", B + 18, clientY + 38);
-  text(doc, "Cond. IVA:", splitX - 20, clientY + 20);
-  text(doc, "Domicilio:", splitX - 20, clientY + 38);
+  text(doc, "Cliente:", recLx, clientY + 20);
+  text(doc, "CUIT/DNI:", recLx, clientY + 38);
+  text(doc, "Cond. IVA:", domLabelX, clientY + 20);
+  text(doc, "Domicilio:", domLabelX, clientY + 38);
+
   set(doc, "helvetica", "normal", 9);
   text(doc, clampToWidth(doc, cl.razon || "Consumidor Final", splitX - B - 82), B + 72, clientY + 20);
   text(doc, clampToWidth(doc, cl.cuit || "-", splitX - B - 82), B + 72, clientY + 38);
-  text(doc, clampToWidth(doc, cl.iva || "Consumidor Final", W - B - splitX - 96), splitX + 84, clientY + 20);
-  text(doc, clampToWidth(doc, cl.dom || "-", W - B - splitX - 6), splitX + 44, clientY + 38);
+  text(doc, clampToWidth(doc, cl.iva || "Consumidor Final", ivaValueMaxW), ivaValueX, clientY + 20);
+  domicilioLines.forEach((lineTxt, lineIdx) => {
+    text(doc, lineTxt, domValueX, clientY + 38 + lineIdx * domLineH);
+  });
 
   return clientY + clientH;
 }

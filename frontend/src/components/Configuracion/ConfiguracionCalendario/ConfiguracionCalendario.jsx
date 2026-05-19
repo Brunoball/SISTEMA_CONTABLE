@@ -483,7 +483,7 @@ export default function ConfiguracionCalendario() {
           )}
 
           {/* Tarjeta 4 — Guardar */}
-          <div className={`cal-metaCard ${modo === "mes_completo" ? "cal-metaCard--fullRow" : ""}`}>
+          <div className="cal-metaCard cal-metaCard--save">
             <div className="cal-metaCard__top">
               <div className="cal-metaCard__icon">
                 <FontAwesomeIcon icon={faBolt} />

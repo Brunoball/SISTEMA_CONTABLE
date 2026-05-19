@@ -113,6 +113,22 @@
   grid-column: 1 / -1;
 }
 
+/* La tarjeta de guardado mantiene siempre su lugar dentro de la grilla.
+   Antes se estiraba a fila completa cuando el modo era "Mes completo",
+   dejando un hueco a la derecha de la vista previa. */
+.cal-metaCard--save {
+  grid-column: auto;
+  align-self: stretch;
+}
+
+.cal-metaCard--save .cal-metaCard__body {
+  flex: 1;
+}
+
+.cal-metaCard--save .cal-saveActions {
+  margin-top: auto;
+}
+
 /* ── CABECERA DE TARJETA ── */
 .cal-metaCard__top {
   display: flex;

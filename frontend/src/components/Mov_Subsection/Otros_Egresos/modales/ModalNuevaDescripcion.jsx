@@ -15,6 +15,30 @@ export default function ModalNuevaDescripcion({ open, onClose, onSave, dark }) {
     }
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+
+    const handleEscape = (e) => {
+      if (e.key !== "Escape") return;
+
+      // Este modal puede abrirse encima de otro modal (por ejemplo, Nuevo egreso).
+      // Capturamos el Escape acá para cerrar solo la Nueva descripción y evitar
+      // que el modal padre también reciba el mismo evento y se cierre.
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof e.stopImmediatePropagation === "function") {
+        e.stopImmediatePropagation();
+      }
+
+      if (!saving) {
+        onClose?.();
+      }
+    };
+
+    document.addEventListener("keydown", handleEscape, true);
+    return () => document.removeEventListener("keydown", handleEscape, true);
+  }, [open, saving, onClose]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     

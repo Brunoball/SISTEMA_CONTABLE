@@ -469,6 +469,22 @@ function PriceGroupSection({ title, children }) {
 }
 
 function MiniCreateModal({ open, title, value, loading, onChange, onCancel, onSave }) {
+  useEffect(() => {
+    if (!open) return;
+
+    const handleEscape = (e) => {
+      if (e.key !== "Escape") return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (!loading) onCancel?.();
+    };
+
+    document.addEventListener("keydown", handleEscape, true);
+    return () => document.removeEventListener("keydown", handleEscape, true);
+  }, [open, loading, onCancel]);
+
   if (!open) return null;
 
   const handleMiniEnter = (e) => {

@@ -165,6 +165,8 @@ export default function ConfiguracionDatosLegales() {
   const navigate = useNavigate();
   const fechaInputRef = useRef(null);
 
+  const [configs, setConfigs] = useState([]);
+  const [selectedConfigId, setSelectedConfigId] = useState(0);
   const [form, setForm] = useState(emptyForm);
   const [formInicial, setFormInicial] = useState(emptyForm);
   const [loading, setLoading] = useState(true);
@@ -208,7 +210,22 @@ export default function ConfiguracionDatosLegales() {
         );
       }
 
-      const configNormalizada = normalizarConfigDesdeApi(data.config || {});
+      const configsNormalizadas = Array.isArray(data.configs)
+        ? data.configs.map((cfg) => normalizarConfigDesdeApi(cfg))
+        : [];
+
+      const configNormalizada = normalizarConfigDesdeApi(
+        data.config || configsNormalizadas[0] || {}
+      );
+
+      const listado = configsNormalizadas.length
+        ? configsNormalizadas
+        : configNormalizada.idConfigFacturacion
+          ? [configNormalizada]
+          : [];
+
+      setConfigs(listado);
+      setSelectedConfigId(Number(configNormalizada.idConfigFacturacion || 0));
       setForm(configNormalizada);
       setFormInicial(configNormalizada);
     } catch (err) {
@@ -248,6 +265,7 @@ export default function ConfiguracionDatosLegales() {
 
     const payload = {
       ...form,
+      idConfigFacturacion: Number(form.idConfigFacturacion || selectedConfigId || 0),
       razon_social: limpiarTextoMayus(form.razon_social),
       nombre_fantasia: limpiarTextoMayus(form.nombre_fantasia),
       cuit: limpiarTexto(form.cuit),
@@ -301,8 +319,31 @@ export default function ConfiguracionDatosLegales() {
       }
 
       const configGuardada = normalizarConfigDesdeApi(data.config || payload);
+      const configsActualizadas = Array.isArray(data.configs)
+        ? data.configs.map((cfg) => normalizarConfigDesdeApi(cfg))
+        : [];
+
       setForm(configGuardada);
       setFormInicial(configGuardada);
+      setSelectedConfigId(Number(configGuardada.idConfigFacturacion || 0));
+      setConfigs((prev) => {
+        if (configsActualizadas.length) return configsActualizadas;
+
+        const idGuardado = Number(configGuardada.idConfigFacturacion || 0);
+        const existe = prev.some(
+          (cfg) => Number(cfg.idConfigFacturacion || 0) === idGuardado
+        );
+
+        if (existe) {
+          return prev.map((cfg) =>
+            Number(cfg.idConfigFacturacion || 0) === idGuardado
+              ? configGuardada
+              : cfg
+          );
+        }
+
+        return idGuardado ? [...prev, configGuardada] : prev;
+      });
       mostrarToast(
         "exito",
         data?.mensaje || "Datos legales guardados correctamente."
@@ -329,6 +370,37 @@ export default function ConfiguracionDatosLegales() {
       codigo_comprobante: encontrado?.codigo || prev.codigo_comprobante,
     }));
   };
+
+  const seleccionarConfig = useCallback(
+    (config) => {
+      if (saving || loading) return;
+
+      const configNormalizada = normalizarConfigDesdeApi(config || {});
+      const id = Number(configNormalizada.idConfigFacturacion || 0);
+      if (!id || id === Number(selectedConfigId || 0)) return;
+
+      if (
+        hasChanges &&
+        typeof window !== "undefined" &&
+        !window.confirm(
+          "Tenés cambios sin guardar en esta cuenta. Si cambiás de pestaña se van a descartar. ¿Querés continuar?"
+        )
+      ) {
+        return;
+      }
+
+      setSelectedConfigId(id);
+      setForm(configNormalizada);
+      setFormInicial(configNormalizada);
+    },
+    [hasChanges, loading, saving, selectedConfigId]
+  );
+
+  const cuentasFacturacionLabel = useMemo(() => {
+    const total = configs.length;
+    if (total <= 1) return "Cuenta de facturación";
+    return `${total} cuentas de facturación`;
+  }, [configs.length]);
 
   return (
     <section className="cfg-legal-page">
@@ -394,6 +466,13 @@ export default function ConfiguracionDatosLegales() {
             <span>Punto de venta</span>
             <strong>{form.punto_venta || "00001"}</strong>
           </div>
+
+          {configs.length > 1 && (
+            <div className="cfg-legal-summary__line">
+              <span>Cuenta seleccionada</span>
+              <strong>#{form.idConfigFacturacion || selectedConfigId || "—"}</strong>
+            </div>
+          )}
         </aside>
 
         <div className="cfg-legal-card">
@@ -404,11 +483,49 @@ export default function ConfiguracionDatosLegales() {
             <div>
               <h2>Información fiscal</h2>
               <p>
-                Estos datos se guardan en la tabla config_facturacion del tenant
-                actual.
+                {configs.length > 1
+                  ? "Seleccioná una cuenta y editá sus datos legales sin pisar la otra."
+                  : "Estos datos se guardan en la tabla config_facturacion del tenant actual."}
               </p>
             </div>
           </div>
+
+          {!loading && configs.length > 1 && (
+            <div className="cfg-legal-tabsWrap" aria-label="Cuentas de facturación">
+              <div className="cfg-legal-tabsHeader">
+                <span>{cuentasFacturacionLabel}</span>
+                <strong>Editá una cuenta por vez</strong>
+              </div>
+
+              <div className="cfg-legal-tabs" role="tablist">
+                {configs.map((cfg, index) => {
+                  const id = Number(cfg.idConfigFacturacion || 0);
+                  const active = id === Number(selectedConfigId || 0);
+                  const label =
+                    limpiarTexto(cfg.nombre_fantasia) ||
+                    limpiarTexto(cfg.razon_social) ||
+                    `CUENTA ${index + 1}`;
+                  const cuit = limpiarTexto(cfg.cuit) || "CUIT SIN CARGAR";
+
+                  return (
+                    <button
+                      key={id || `cfg-${index}`}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      className={`cfg-legal-tab ${active ? "is-active" : ""}`}
+                      onClick={() => seleccionarConfig(cfg)}
+                      disabled={saving}
+                      title={`${label} - ${cuit}`}
+                    >
+                      <span>{label}</span>
+                      <small>{cuit}</small>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {loading ? (
             <>

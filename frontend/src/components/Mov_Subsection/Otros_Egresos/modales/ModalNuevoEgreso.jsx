@@ -804,11 +804,13 @@ export default function ModalNuevoEgreso({
   useEffect(() => {
     if (!open) return;
     const h = (e) => {
-      if (e.key === "Escape" && !saving && !openVerComp) onClose?.();
+      // Si hay un modal hijo abierto, el Escape debe cerrar primero ese modal hijo
+      // y no el modal completo de Nuevo egreso.
+      if (e.key === "Escape" && !saving && !openVerComp && !openNuevaDescModal) onClose?.();
     };
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
-  }, [open, onClose, saving, openVerComp]);
+  }, [open, onClose, saving, openVerComp, openNuevaDescModal]);
 
   useEffect(() => {
     const wasOpen = prevOpenRef.current;

@@ -517,9 +517,25 @@ export default function ConfiguracionDatosLegales() {
                       onClick={() => seleccionarConfig(cfg)}
                       disabled={saving}
                       title={`${label} - ${cuit}`}
+                      aria-label={`Seleccionar ${label}. ${cuit}${active ? ", cuenta activa" : ""}`}
                     >
-                      <span>{label}</span>
-                      <small>{cuit}</small>
+                      <div className="cfg-legal-tab__top">
+                        
+                      <div className="cfg-legal-tab__main">
+                        <span className="cfg-legal-tab__icon" aria-hidden="true">
+                          <FontAwesomeIcon icon={faFileInvoiceDollar} />
+                        </span>
+
+                        <span className="cfg-legal-tab__text">
+                          <span>{label}</span>
+                          <small>{cuit}</small>
+                        </span>
+                      </div>
+                        {active && (
+                          <strong className="cfg-legal-tab__badge">Activa</strong>
+                        )}
+                      </div>
+
                     </button>
                   );
                 })}

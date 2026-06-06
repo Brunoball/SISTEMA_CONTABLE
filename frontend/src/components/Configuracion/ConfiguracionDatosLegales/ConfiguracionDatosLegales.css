@@ -668,7 +668,6 @@ body.dark .cfg-legal-card__top p {
 body.dark .cfg-legal-hero__eyebrow,
 body.dark .cfg-legal-summary__kicker,
 body.dark .cfg-legal-section-title {
-  background: rgba(78, 161, 255, 0.12);
   border-color: rgba(78, 161, 255, 0.22);
   color: rgba(160, 200, 255, 0.95);
 }
@@ -830,11 +829,31 @@ body.dark .cfg-legal-btn--save {
 }
 
 .cfg-legal-tabsWrap {
-  margin: -2px 0 15px;
-  padding: 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(10, 37, 64, 0.075);
-  background: linear-gradient(180deg, rgba(248, 251, 255, 0.82), rgba(255, 255, 255, 0.94));
+  position: relative;
+  margin: -2px 0 16px;
+  padding: 13px;
+  border-radius: 18px;
+  border: 1px solid rgba(10, 37, 64, 0.08);
+  background:
+    radial-gradient(circle at top left, rgba(0, 85, 187, 0.09), transparent 34%),
+    linear-gradient(180deg, rgba(248, 251, 255, 0.92), rgba(255, 255, 255, 0.97));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  overflow: hidden;
+}
+
+.cfg-legal-tabsWrap::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(0, 85, 187, 0.08), transparent 26%);
+  opacity: 0.75;
+}
+
+.cfg-legal-tabsHeader,
+.cfg-legal-tabs {
+  position: relative;
+  z-index: 1;
 }
 
 .cfg-legal-tabsHeader {
@@ -842,13 +861,20 @@ body.dark .cfg-legal-btn--save {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 10px;
+  margin-bottom: 11px;
 }
 
 .cfg-legal-tabsHeader span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 85, 187, 0.13);
+  background: rgba(0, 85, 187, 0.075);
+  color: var(--balto-action, #0055bb);
   font-size: 10px;
   font-weight: 820;
-  color: var(--balto-action, #0055bb);
   text-transform: uppercase;
   letter-spacing: 0.065em;
 }
@@ -856,28 +882,32 @@ body.dark .cfg-legal-btn--save {
 .cfg-legal-tabsHeader strong {
   font-size: 11px;
   font-weight: 650;
-  color: #6a7989;
+  color: #5f7082;
 }
 
 .cfg-legal-tabs {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 9px;
+  grid-template-columns: repeat(auto-fit, minmax(245px, 1fr));
+  gap: 10px;
 }
 
 .cfg-legal-tab {
+  position: relative;
   width: 100%;
   min-width: 0;
-  min-height: 58px;
-  display: grid;
-  gap: 3px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
   text-align: left;
-  border: 1.5px solid rgba(10, 37, 64, 0.105);
-  border-radius: 14px;
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(10, 37, 64, 0.105);
+  border-radius: 16px;
+  padding: 12px 13px;
+  background: rgba(255, 255, 255, 0.92);
   color: var(--balto-ink, #0a2540);
   cursor: pointer;
+  overflow: hidden;
+  box-shadow: 0 10px 24px -22px rgba(10, 37, 64, 0.36);
   transition:
     transform 0.14s ease,
     border-color 0.15s ease,
@@ -885,16 +915,34 @@ body.dark .cfg-legal-btn--save {
     box-shadow 0.15s ease;
 }
 
+.cfg-legal-tab::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: linear-gradient(180deg, var(--balto-ink, #0a2540), var(--balto-action, #0055bb));
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
 .cfg-legal-tab:hover:not(:disabled) {
   transform: translateY(-1px);
-  border-color: rgba(0, 85, 187, 0.28);
-  box-shadow: 0 12px 24px -22px rgba(10, 37, 64, 0.35);
+  border-color: rgba(0, 85, 187, 0.30);
+  background: #fff;
+  box-shadow: 0 16px 30px -24px rgba(10, 37, 64, 0.46);
 }
 
 .cfg-legal-tab.is-active {
-  border-color: rgba(0, 85, 187, 0.62);
-  background: rgba(0, 85, 187, 0.075);
-  box-shadow: inset 0 0 0 1px rgba(0, 85, 187, 0.08);
+  border-color: rgba(0, 85, 187, 0.58);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(239, 246, 255, 0.96));
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 85, 187, 0.08),
+    0 16px 32px -25px rgba(0, 85, 187, 0.50);
+}
+
+.cfg-legal-tab.is-active::before {
+  opacity: 1;
 }
 
 .cfg-legal-tab:disabled {
@@ -903,20 +951,85 @@ body.dark .cfg-legal-btn--save {
   transform: none;
 }
 
-.cfg-legal-tab span {
-  font-size: 12.2px;
+.cfg-legal-tab__top,
+.cfg-legal-tab__main,
+.cfg-legal-tab__text {
+  min-width: 0;
+}
+
+.cfg-legal-tab__top {
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cfg-legal-tab__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 22px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(0, 85, 187, 0.10);
+  color: var(--balto-action, #0055bb);
+  border: 1px solid rgba(0, 85, 187, 0.14);
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 760;
+}
+
+.cfg-legal-tab__badge::before {
+  content: "✓";
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.cfg-legal-tab__main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cfg-legal-tab__icon {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 85, 187, 0.12);
+  background: rgba(0, 85, 187, 0.075);
+  color: var(--balto-action, #0055bb);
+  font-size: 13px;
+}
+
+.cfg-legal-tab__text {
+  display: grid;
+  gap: 4px;
+}
+
+.cfg-legal-tab__text span {
+  display: block;
+  font-size: 12.6px;
   font-weight: 780;
-  line-height: 1.25;
+  line-height: 1.22;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--balto-ink, #0a2540);
 }
 
-.cfg-legal-tab small {
-  font-size: 10.5px;
+.cfg-legal-tab__text small {
+  display: block;
+  font-size: 10.8px;
   font-weight: 680;
   color: #6a7989;
   letter-spacing: 0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 620px) {
@@ -928,40 +1041,72 @@ body.dark .cfg-legal-btn--save {
   .cfg-legal-tabs {
     grid-template-columns: 1fr;
   }
+
+  .cfg-legal-tab {
+    min-height: 86px;
+  }
 }
 
 [data-theme="oscuro"] .cfg-legal-tabsWrap,
 body.dark .cfg-legal-tabsWrap {
-  background: rgba(15, 23, 42, 0.42);
+  background:
+    radial-gradient(circle at top left, rgba(78, 161, 255, 0.13), transparent 35%),
+    rgba(15, 23, 42, 0.44);
   border-color: rgba(148, 163, 184, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+[data-theme="oscuro"] .cfg-legal-tabsWrap::before,
+body.dark .cfg-legal-tabsWrap::before {
+  background: linear-gradient(90deg, rgba(78, 161, 255, 0.10), transparent 28%);
 }
 
 [data-theme="oscuro"] .cfg-legal-tabsHeader span,
 body.dark .cfg-legal-tabsHeader span {
+  background: rgba(78, 161, 255, 0.12);
+  border-color: rgba(78, 161, 255, 0.20);
   color: rgba(160, 200, 255, 0.95);
 }
 
 [data-theme="oscuro"] .cfg-legal-tabsHeader strong,
 body.dark .cfg-legal-tabsHeader strong,
-[data-theme="oscuro"] .cfg-legal-tab small,
-body.dark .cfg-legal-tab small {
+[data-theme="oscuro"] .cfg-legal-tab__text small,
+body.dark .cfg-legal-tab__text small {
   color: rgba(210, 220, 235, 0.60);
 }
 
 [data-theme="oscuro"] .cfg-legal-tab,
 body.dark .cfg-legal-tab {
-  background: rgba(15, 23, 42, 0.76);
+  background: rgba(15, 23, 42, 0.78);
   border-color: rgba(148, 163, 184, 0.16);
   color: rgba(255, 255, 255, 0.90);
+  box-shadow: none;
 }
 
 [data-theme="oscuro"] .cfg-legal-tab:hover:not(:disabled),
 body.dark .cfg-legal-tab:hover:not(:disabled) {
-  border-color: rgba(78, 161, 255, 0.32);
+  background: rgba(15, 23, 42, 0.94);
+  border-color: rgba(78, 161, 255, 0.34);
 }
 
 [data-theme="oscuro"] .cfg-legal-tab.is-active,
 body.dark .cfg-legal-tab.is-active {
   border-color: rgba(78, 161, 255, 0.55);
-  background: rgba(78, 161, 255, 0.12);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 64, 105, 0.34));
+  box-shadow: inset 0 0 0 1px rgba(78, 161, 255, 0.10);
 }
+
+[data-theme="oscuro"] .cfg-legal-tab__text span,
+body.dark .cfg-legal-tab__text span {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+[data-theme="oscuro"] .cfg-legal-tab__icon,
+body.dark .cfg-legal-tab__icon,
+[data-theme="oscuro"] .cfg-legal-tab__badge,
+body.dark .cfg-legal-tab__badge {
+  background: rgba(78, 161, 255, 0.12);
+  border-color: rgba(78, 161, 255, 0.22);
+  color: rgba(160, 200, 255, 0.95);
+}
+

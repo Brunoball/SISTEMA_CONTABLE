@@ -137,17 +137,6 @@ function getMedioPagoId(c) {
 function optionLabel(x) {
   return safeText(x?.nombre ?? x?.categoria ?? x?.descripcion ?? x?.detalle ?? "");
 }
-function getStockDisponible(detalle) {
-  const cand =
-    detalle?.stock ?? detalle?.stock_disponible ?? detalle?.stockDisponible ??
-    detalle?.cantidad_stock ?? detalle?.cantidad ?? null;
-  if (cand === null || cand === undefined || cand === "") return null;
-  const n = Number(cand);
-  return Number.isFinite(n) ? n : null;
-}
-function isSinStock(stock) {
-  return stock !== null && stock !== undefined && Number(stock) <= 0;
-}
 function getComprobanteDownloadUrl(idMovimiento) {
   return `${BASE_URL}/api.php?action=otros_ingresos_comprobantes_descargar&id_movimiento=${Number(idMovimiento || 0)}`;
 }
@@ -213,21 +202,22 @@ function detectChequeTipo(nombre) {
 
 // ─── Normalización de listas ───────────────────────────────────────────────────
 function normalizeDetalles(lists) {
-  return Array.isArray(lists?.detalles_ingresos)
-    ? lists.detalles_ingresos
-    : Array.isArray(lists?.detallesIngresos)
-    ? lists.detallesIngresos
-    : Array.isArray(lists?.detalles_ingreso)
-    ? lists.detalles_ingreso
-    : Array.isArray(lists?.detallesIngreso)
-    ? lists.detallesIngreso
-    : Array.isArray(lists?.detalles)
-    ? lists.detalles
-    : Array.isArray(lists?.categorias_ingreso)
-    ? lists.categorias_ingreso
-    : Array.isArray(lists?.categoriasIngreso)
-    ? lists.categoriasIngreso
-    : [];
+  const src = lists && typeof lists === "object" ? lists : {};
+  const l = src?.listas && typeof src.listas === "object" ? src.listas : src;
+
+  // `detalles` en las listas globales es stock (`stock_productos`).
+  // Este modal debe usar solamente la tabla `detalles`, expuesta en claves
+  // específicas de otros ingresos. Si viene vacía, no debe hacer fallback a stock.
+  for (const key of [
+    "detalles_ingresos",
+    "detallesIngresos",
+    "detalles_ingreso",
+    "detallesIngreso",
+  ]) {
+    if (Array.isArray(l?.[key])) return l[key];
+  }
+
+  return [];
 }
 function normalizeMediosPago(lists) {
   const raw = Array.isArray(lists?.medios_pago)
@@ -766,7 +756,7 @@ export default function ModalEditarIngreso({
 
   useEffect(() => { if (open) cargarInfoComprobante(); }, [open, cargarInfoComprobante]);
 
-  // Enriquecer ítems con stock desde listas
+  // Enriquecer ítems con nombre desde la tabla `detalles` sin aplicar reglas de stock.
   useEffect(() => {
     if (!open || !Array.isArray(detalles) || !detalles.length) return;
     setForm((prev) => ({
@@ -777,13 +767,11 @@ export default function ModalEditarIngreso({
             (d) => String(getDetalleId(d) ?? "") === String(it.id_detalle || "")
           ) || null;
         if (!detalleObj) return it;
-        const stockDisponible = getStockDisponible(detalleObj);
-        const sinStock = isSinStock(stockDisponible);
         return {
           ...it,
           detalle: it.detalle || optionLabel(detalleObj),
-          stock_disponible: stockDisponible,
-          sinStock,
+          stock_disponible: null,
+          sinStock: false,
         };
       }),
     }));
@@ -819,20 +807,14 @@ export default function ModalEditarIngreso({
         return;
       }
       const precio = safeNumber(item?.precio || 0);
-      const stockDisponible = getStockDisponible(item);
-      const sinStock = isSinStock(stockDisponible);
       updateItem(uid, {
         id_detalle: String(getDetalleId(item) ?? ""),
         detalle: optionLabel(item),
         precio,
-        stock_disponible: stockDisponible,
-        sinStock,
-        cantidad: sinStock ? "" : 1,
+        stock_disponible: null,
+        sinStock: false,
+        cantidad: 1,
       });
-      if (sinStock)
-        showToast(
-          "advertencia",
-          `El producto "${optionLabel(item)}" no tiene stock disponible.`);
     },
     [updateItem, showToast]
   );
@@ -841,23 +823,8 @@ export default function ModalEditarIngreso({
     (uid, newCantidad) => {
       const row = form.items.find((r) => r.uid === uid);
       if (!row) return;
-      if (row.sinStock || isSinStock(row.stock_disponible)) {
-        updateItem(uid, { cantidad: "" });
-        return;
-      }
-      const stockDisponible = row.stock_disponible;
       let cantidadFinal = newCantidad === "" ? "" : Number(newCantidad);
       if (typeof cantidadFinal === "number" && cantidadFinal < 0) cantidadFinal = 0;
-      if (
-        stockDisponible !== null &&
-        stockDisponible !== undefined &&
-        stockDisponible !== "" &&
-        typeof cantidadFinal === "number" &&
-        cantidadFinal > Number(stockDisponible)
-      ) {
-        cantidadFinal = Number(stockDisponible);
-        showToast("advertencia", `Stock máximo disponible: ${stockDisponible}`);
-      }
       updateItem(uid, { cantidad: cantidadFinal });
     },
     [form.items, updateItem, showToast]
@@ -1239,15 +1206,13 @@ export default function ModalEditarIngreso({
           throw new Error(data?.mensaje || "No se pudo crear la descripción.");
         const item = data.detalle;
         const precio = safeNumber(item?.precio || 0);
-        const stockDisponible = getStockDisponible(item);
-        const sinStock = isSinStock(stockDisponible);
         updateItem(currentRowIdForNewDesc, {
           id_detalle: String(item.id_detalle || item.id || ""),
           detalle: item.nombre || nombre,
           precio,
-          stock_disponible: stockDisponible,
-          sinStock,
-          cantidad: sinStock ? "" : 1,
+          stock_disponible: null,
+          sinStock: false,
+          cantidad: 1,
         });
         showToast("exito", "Descripción creada y seleccionada correctamente.");
         return true;
@@ -1327,16 +1292,10 @@ export default function ModalEditarIngreso({
 
                   <div className="mi-cr-table__rows">
                     {(form.items || []).map((it) => {
-                      const stockNum =
-                        it.stock_disponible !== null && it.stock_disponible !== undefined
-                          ? Number(it.stock_disponible)
-                          : null;
-                      const rowSinStock = it.sinStock || isSinStock(stockNum);
-
                       return (
                         <div
                           key={it.uid}
-                          className={`mi-cr-row${rowSinStock ? " mi-cr-row--sin-stock" : ""}`}
+                          className="mi-cr-row"
                           style={{
                             gridTemplateColumns:
                               "2.4fr 0.8fr 1.1fr 0.9fr 1fr 1.1fr 0.45fr",
@@ -1373,46 +1332,20 @@ export default function ModalEditarIngreso({
                             <input
                               className="nv-cell-input nv-cell-input--center"
                               type="number"
-                              min={rowSinStock ? undefined : "1"}
+                              min="1"
                               step="1"
-                              style={{
-                                width: "100%",
-                                background: rowSinStock ? "#f3f4f6" : undefined,
-                                color: rowSinStock ? "#b91c1c" : undefined,
-                                borderColor: rowSinStock ? "#fca5a5" : undefined,
-                                cursor: rowSinStock ? "not-allowed" : undefined,
-                                opacity: rowSinStock ? 0.9 : 1,
-                              }}
-                              value={rowSinStock ? "" : it.cantidad}
+                              style={{ width: "100%" }}
+                              value={it.cantidad}
                               onChange={(e) =>
                                 handleCantidadChange(
                                   it.uid,
                                   e.target.value === "" ? "" : Number(e.target.value)
                                 )
                               }
-                              disabled={saving || rowSinStock}
-                              placeholder={rowSinStock ? "0" : ""}
-                              title={
-                                rowSinStock
-                                  ? "No podés ingresar cantidad porque el stock es 0"
-                                  : ""
-                              }
+                              disabled={saving}
+                              placeholder=""
+                              title=""
                             />
-                            {it.stock_disponible !== null &&
-                              it.stock_disponible !== undefined && (
-                                <div
-                                  style={{
-                                    fontSize: "10px",
-                                    marginTop: "2px",
-                                    fontWeight: rowSinStock ? 700 : 500,
-                                    color: rowSinStock ? "#b91c1c" : "#666",
-                                  }}
-                                >
-                                  {rowSinStock
-                                    ? "Sin stock"
-                                    : `Stock: ${it.stock_disponible}`}
-                                </div>
-                              )}
                           </div>
 
                           {/* Precio */}

@@ -1626,40 +1626,26 @@ export default function OtrosEgresos() {
   };
 
   const lists = useMemo(() => {
-    const detallesCompartidos =
-      (Array.isArray(listsBase?.detalles_egresos) && listsBase.detalles_egresos.length
-        ? listsBase.detalles_egresos
-        : null) ||
-      (Array.isArray(listsBase?.detallesEgresos) && listsBase.detallesEgresos.length
-        ? listsBase.detallesEgresos
-        : null) ||
-      (Array.isArray(listsBase?.detalles_egreso) && listsBase.detalles_egreso.length
-        ? listsBase.detalles_egreso
-        : null) ||
-      (Array.isArray(listsBase?.detallesEgreso) && listsBase.detallesEgreso.length
-        ? listsBase.detallesEgreso
-        : null) ||
-      (Array.isArray(listsBase?.detalles_ingresos) && listsBase.detalles_ingresos.length
-        ? listsBase.detalles_ingresos
-        : null) ||
-      (Array.isArray(listsBase?.detallesIngresos) && listsBase.detallesIngresos.length
-        ? listsBase.detallesIngresos
-        : null) ||
-      (Array.isArray(listsBase?.detalles_ingreso) && listsBase.detalles_ingreso.length
-        ? listsBase.detalles_ingreso
-        : null) ||
-      (Array.isArray(listsBase?.detallesIngreso) && listsBase.detallesIngreso.length
-        ? listsBase.detallesIngreso
-        : null) ||
-      (Array.isArray(listsBase?.detalles) && listsBase.detalles.length
-        ? listsBase.detalles
-        : null) ||
-      (Array.isArray(listsBase?.categorias_ingreso) && listsBase.categorias_ingreso.length
-        ? listsBase.categorias_ingreso
-        : null) ||
-      (Array.isArray(listsBase?.categorias_egreso) && listsBase.categorias_egreso.length
-        ? listsBase.categorias_egreso
-        : []);
+    const buscarDetallesModulo = () => {
+      // `detalles` global viene de stock_productos. Para otros egresos se debe
+      // usar exclusivamente la tabla `detalles`, expuesta por claves específicas.
+      // Aunque venga vacía, no hacemos fallback a productos de stock.
+      for (const key of [
+        "detalles_egresos",
+        "detallesEgresos",
+        "detalles_egreso",
+        "detallesEgreso",
+        "detalles_ingresos",
+        "detallesIngresos",
+        "detalles_ingreso",
+        "detallesIngreso",
+      ]) {
+        if (Array.isArray(listsBase?.[key])) return listsBase[key];
+      }
+      return [];
+    };
+
+    const detallesCompartidos = buscarDetallesModulo();
 
     return {
       ...listsBase,

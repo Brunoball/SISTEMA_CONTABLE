@@ -206,18 +206,74 @@ function clienteProveedorLabel(row) {
   return safeText(pick(row, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], ""));
 }
 
+function cleanInfoText(v) {
+  const s = String(v ?? "").trim();
+  return s && s !== "-" && s !== "—" ? s : "";
+}
+
+function getMovimientoOperacionLabel(row) {
+  const raw =
+    cleanInfoText(row?.operacion) ||
+    cleanInfoText(row?.tipo_operacion) ||
+    cleanInfoText(row?.tipo_operacion_nombre) ||
+    cleanInfoText(row?.tipo_movimiento);
+
+  if (raw) return raw;
+
+  const idTipo = Number(row?.id_tipo_operacion ?? row?.id_tipo_movimiento ?? 0);
+  if (idTipo === 1) return "VENTA";
+  if (idTipo === 2) return "COMPRA";
+  if (idTipo === 3) return "OTROS INGRESOS";
+  if (idTipo === 4) return "OTROS EGRESOS";
+  if (idTipo === 5) return "PRESUPUESTO";
+  return "MOVIMIENTO";
+}
+
+function getTerceroInfoValue(row) {
+  return (
+    cleanInfoText(row?.proveedor) ||
+    cleanInfoText(row?.nombre_proveedor) ||
+    cleanInfoText(row?.razon_social_proveedor) ||
+    cleanInfoText(row?.cliente) ||
+    cleanInfoText(row?.nombre_cliente) ||
+    cleanInfoText(row?.razon_social_cliente) ||
+    cleanInfoText(row?.tercero) ||
+    cleanInfoText(row?.emisor) ||
+    cleanInfoText(row?.cheque_emisor) ||
+    cleanInfoText(row?.cheque?.emisor)
+  );
+}
+
 function normalizeRowForInfoModal(row) {
   if (!row) return row;
 
   const next = withDepositoChequeDetalle({ ...row });
-  if (isOtrosMovimiento(next)) {
-    next.cliente = "";
-    next.nombre_cliente = "";
-    next.razon_social_cliente = "";
-    next.proveedor = "";
-    next.nombre_proveedor = "";
-    next.razon_social_proveedor = "";
-    next.tercero = "";
+  const operacion = getMovimientoOperacionLabel(next);
+  const operacionNorm = normalizeComparableText(operacion);
+
+  // El modal global usa estas claves para la caja "Tipo".
+  // Si el movimiento no tiene tipo de venta (otros ingresos/egresos, presupuesto,
+  // depósito de cheque, etc.), le pasamos la operación real para que no quede "—".
+  next.tipo_operacion = cleanInfoText(next.tipo_operacion) || operacion;
+  next.tipo_operacion_nombre = cleanInfoText(next.tipo_operacion_nombre) || operacion;
+  next.tipo_movimiento = cleanInfoText(next.tipo_movimiento) || operacion;
+  next.pago_tipo_venta = cleanInfoText(next.pago_tipo_venta) || cleanInfoText(next.tipo_venta) || operacion;
+
+  const terceroActual = getTerceroInfoValue(next);
+  if (!terceroActual) {
+    if (operacionNorm.includes("PRESUPUESTO")) {
+      next.cliente = "Sin cliente informado";
+    } else if (operacionNorm.includes("VENTA") || operacionNorm.includes("RECIBO")) {
+      next.cliente = "Consumidor final / sin cliente";
+    } else if (operacionNorm.includes("COMPRA") || operacionNorm.includes("ORDEN DE PAGO")) {
+      next.proveedor = "Proveedor no informado";
+    } else if (operacionNorm.includes("OTROS INGRESOS") || operacionNorm.includes("OTROS EGRESOS")) {
+      next.tercero = "No aplica";
+    } else {
+      next.tercero = "No informado";
+    }
+  } else if (!cleanInfoText(next.tercero) && !cleanInfoText(next.cliente) && !cleanInfoText(next.proveedor)) {
+    next.tercero = terceroActual;
   }
 
   return next;

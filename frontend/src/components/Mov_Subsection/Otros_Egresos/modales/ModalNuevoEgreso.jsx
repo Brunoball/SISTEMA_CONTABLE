@@ -154,7 +154,6 @@ function getDetalleId(d) {
     d?.detalle_id ??
     d?.id_categoria_egreso ??
     d?.idCategoriaEgreso ??
-    d?.id_stock_producto ??
     null;
   const n = Number(c);
   return Number.isFinite(n) && n > 0 ? n : null;
@@ -189,21 +188,6 @@ function getSavedMovimientoIdFromResponse(data, init = null) {
   }
   return null;
 }
-function getStockDisponible(d) {
-  const c =
-    d?.stock ??
-    d?.stock_disponible ??
-    d?.stockDisponible ??
-    d?.cantidad_stock ??
-    d?.cantidad ??
-    null;
-  if (c === null || c === undefined || c === "") return null;
-  const n = Number(c);
-  return Number.isFinite(n) ? n : null;
-}
-function isSinStock(s) {
-  return s !== null && s !== undefined && Number(s) <= 0;
-}
 function getChequeIdsArray(v) {
   if (Array.isArray(v)) return v.map((x) => String(x));
   if (v == null || v === "") return [];
@@ -215,6 +199,13 @@ function normalizeLists(lists) {
   const src = lists && typeof lists === "object" ? lists : {};
   const l = src?.listas && typeof src.listas === "object" ? src.listas : src;
   const pick = (k) => (Array.isArray(l?.[k]) ? l[k] : []);
+  const pickExplicitArray = (keys) => {
+    for (const k of keys) {
+      if (Array.isArray(l?.[k])) return l[k];
+    }
+    return [];
+  };
+
   const mediosPago = pick("medios_pago").length
     ? pick("medios_pago")
     : pick("mediosPago").length
@@ -222,22 +213,21 @@ function normalizeLists(lists) {
       : pick("medios").length
         ? pick("medios")
         : [];
-  const detallesBase = pick("detalles").length
-    ? pick("detalles")
-    : pick("categorias_egreso").length
-      ? pick("categorias_egreso")
-      : pick("categoriasEgreso").length
-        ? pick("categoriasEgreso")
-        : pick("categorias").length
-          ? pick("categorias")
-          : [];
-  const detallesEgresos = pick("detalles_egresos").length
-    ? pick("detalles_egresos")
-    : pick("detallesEgresos").length
-      ? pick("detallesEgresos")
-      : pick("detalles_egreso").length
-        ? pick("detalles_egreso")
-        : detallesBase;
+
+  // `detalles` global es stock (`stock_productos`). Otros egresos debe usar
+  // solamente la tabla `detalles` expuesta por claves específicas. Si está
+  // vacía, el autocompletado queda vacío y permite crear una descripción.
+  const detallesEgresos = pickExplicitArray([
+    "detalles_egresos",
+    "detallesEgresos",
+    "detalles_egreso",
+    "detallesEgreso",
+    "detalles_ingresos",
+    "detallesIngresos",
+    "detalles_ingreso",
+    "detallesIngreso",
+  ]);
+
   const clasificaciones = pick("clasificaciones").length
     ? pick("clasificaciones")
     : pick("clasificacion").length
@@ -946,15 +936,13 @@ export default function ModalNuevoEgreso({
         const data = await parseJsonOrThrow(response);
         if (data.exito && data.detalle) {
           const precio = safeNumber(data.detalle?.precio || 0);
-          const stockDisponible = getStockDisponible(data.detalle);
-          const sinStock = isSinStock(stockDisponible);
           updateRow(currentRowIdForNewDesc, {
             id_detalle: String(data.detalle.id_detalle || data.detalle.id || ""),
             detalle: data.detalle.nombre || nombreDescripcion,
             precio,
-            stock_disponible: stockDisponible,
-            sinStock,
-            cantidad: sinStock ? "" : 1,
+            stock_disponible: null,
+            sinStock: false,
+            cantidad: 1,
           });
           showToast("exito", "Descripción creada y seleccionada correctamente.", 2500);
           return true;
@@ -975,17 +963,14 @@ export default function ModalNuevoEgreso({
         return;
       }
       const precio = safeNumber(item?.precio || 0);
-      const stockDisponible = getStockDisponible(item);
-      const sinStock = isSinStock(stockDisponible);
       updateRow(rowId, {
         id_detalle: String(getDetalleId(item) ?? ""),
         detalle: optionLabel(item),
         precio,
-        stock_disponible: stockDisponible,
-        sinStock,
-        cantidad: sinStock ? "" : 1,
+        stock_disponible: null,
+        sinStock: false,
+        cantidad: 1,
       });
-      if (sinStock) showToast("advertencia", `El producto "${optionLabel(item)}" no tiene stock disponible.`, 2500);
     },
     [updateRow, showToast, handleCrearNuevaDescripcion]
   );
@@ -994,22 +979,8 @@ export default function ModalNuevoEgreso({
     (rowId, newCantidad) => {
       const row = rows.find((r) => r.id === rowId);
       if (!row) return;
-      if (row.sinStock || isSinStock(row.stock_disponible)) {
-        updateRow(rowId, { cantidad: "" });
-        return;
-      }
       let cantidadFinal = newCantidad === "" ? "" : Number(newCantidad);
       if (typeof cantidadFinal === "number" && cantidadFinal < 0) cantidadFinal = 0;
-      if (
-        row.stock_disponible !== null &&
-        row.stock_disponible !== undefined &&
-        row.stock_disponible !== "" &&
-        typeof cantidadFinal === "number" &&
-        cantidadFinal > Number(row.stock_disponible)
-      ) {
-        cantidadFinal = Number(row.stock_disponible);
-        showToast("advertencia", `Stock máximo disponible: ${row.stock_disponible}`, 2000);
-      }
       updateRow(rowId, { cantidad: cantidadFinal });
     },
     [rows, updateRow, showToast]
@@ -1291,10 +1262,8 @@ export default function ModalNuevoEgreso({
 
                 <div ref={rowsContainerRef} className={`mi-cr-table__rows${hasScroll ? " has-scroll" : ""}`}>
                   {rowsCalc.map((r) => {
-                    const stockNum = r.stock_disponible !== null && r.stock_disponible !== undefined ? Number(r.stock_disponible) : null;
-                    const rowSinStock = r.sinStock || isSinStock(stockNum);
                     return (
-                      <div key={r.id} className={`mi-cr-row${rowSinStock ? " mi-cr-row--sin-stock" : ""}`}>
+                      <div key={r.id} className="mi-cr-row">
                         <div className="mi-cr-cell mi-cr-cell--detalle">
                           <GlobalAutocomplete
                             value={r.detalle}
@@ -1321,27 +1290,15 @@ export default function ModalNuevoEgreso({
                           <input
                             className="nv-cell-input nv-cell-input--center"
                             type="number"
-                            min={rowSinStock ? undefined : "1"}
+                            min="1"
                             step="1"
-                            value={rowSinStock ? "" : r.cantidad}
+                            value={r.cantidad}
                             onChange={(e) => handleCantidadChange(r.id, e.target.value === "" ? "" : Number(e.target.value))}
-                            disabled={saving || rowSinStock}
-                            placeholder={rowSinStock ? "0" : ""}
-                            title={rowSinStock ? "No podés ingresar cantidad porque el stock es 0" : ""}
-                            style={{
-                              width: "100%",
-                              background: rowSinStock ? "#f3f4f6" : undefined,
-                              color: rowSinStock ? "#b91c1c" : undefined,
-                              borderColor: rowSinStock ? "#fca5a5" : undefined,
-                              cursor: rowSinStock ? "not-allowed" : undefined,
-                              opacity: rowSinStock ? 0.9 : 1,
-                            }}
+                            disabled={saving}
+                            placeholder=""
+                            title=""
+                            style={{ width: "100%" }}
                           />
-                          {r.stock_disponible !== null && r.stock_disponible !== undefined && (
-                            <div style={{ fontSize: "10px", fontWeight: rowSinStock ? 700 : 500, color: rowSinStock ? "#b91c1c" : "#666" }}>
-                              {rowSinStock ? "Sin stock" : `Stock: ${r.stock_disponible}`}
-                            </div>
-                          )}
                         </div>
 
                         <div className="mi-cr-cell mi-cr-cell--center">

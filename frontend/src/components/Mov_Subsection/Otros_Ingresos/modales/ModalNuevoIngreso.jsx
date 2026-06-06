@@ -117,17 +117,6 @@ function getMedioPagoId(c) {
 function optionLabel(x) {
   return safeStr(x?.nombre ?? x?.categoria ?? x?.descripcion ?? x?.detalle ?? "");
 }
-function getStockDisponible(d) {
-  const c =
-    d?.stock ?? d?.stock_disponible ?? d?.stockDisponible ??
-    d?.cantidad_stock ?? d?.cantidad ?? null;
-  if (c === null || c === undefined || c === "") return null;
-  const n = Number(c);
-  return Number.isFinite(n) ? n : null;
-}
-function isSinStock(s) {
-  return s !== null && s !== undefined && Number(s) <= 0;
-}
 function isTemaOscuro() {
   return (
     document.documentElement.getAttribute("data-theme") === "oscuro" ||
@@ -192,18 +181,31 @@ function normalizeLists(lists) {
   const src = lists && typeof lists === "object" ? lists : {};
   const l = src?.listas && typeof src.listas === "object" ? src.listas : src;
   const pick = (k) => (Array.isArray(l?.[k]) ? l[k] : []);
+  const pickExplicitArray = (keys) => {
+    for (const k of keys) {
+      if (Array.isArray(l?.[k])) return l[k];
+    }
+    return [];
+  };
+
   const medios_pago =
     pick("medios_pago").length ? pick("medios_pago") :
     pick("mediosPago").length ? pick("mediosPago") :
     pick("medios").length ? pick("medios") : [];
-  const detalles =
-    pick("detalles_ingresos").length ? pick("detalles_ingresos") :
-    pick("detallesIngresos").length ? pick("detallesIngresos") :
-    pick("detalles_ingreso").length ? pick("detalles_ingreso") :
-    pick("detallesIngreso").length ? pick("detallesIngreso") :
-    pick("detalles").length ? pick("detalles") :
-    pick("categorias_ingreso").length ? pick("categorias_ingreso") :
-    pick("categoriasIngreso").length ? pick("categoriasIngreso") : [];
+
+  // IMPORTANTE:
+  // En las listas globales, `detalles` pertenece al stock (`stock_productos`).
+  // Otros ingresos debe trabajar exclusivamente con la tabla `detalles`, que llega
+  // por las claves específicas `detalles_ingresos` / variantes. Si esa tabla está
+  // vacía, el autocompletado debe quedar vacío y permitir crear una descripción,
+  // nunca caer a productos de stock.
+  const detalles = pickExplicitArray([
+    "detalles_ingresos",
+    "detallesIngresos",
+    "detalles_ingreso",
+    "detallesIngreso",
+  ]);
+
   return { medios_pago, detalles };
 }
 
@@ -800,15 +802,13 @@ export default function ModalNuevoIngreso({
         const data = await parseJsonOrThrow(response);
         if (data.exito && data.detalle) {
           const precio = safeNumber(data.detalle?.precio || 0);
-          const stockDisponible = getStockDisponible(data.detalle);
-          const sinStock = isSinStock(stockDisponible);
           updateRow(currentRowIdForNewDesc, {
             id_detalle: String(data.detalle.id_detalle || data.detalle.id || ""),
             detalle: data.detalle.nombre || nombreDescripcion,
             precio,
-            stock_disponible: stockDisponible,
-            sinStock,
-            cantidad: sinStock ? "" : 1,
+            stock_disponible: null,
+            sinStock: false,
+            cantidad: 1,
           });
           showToast("exito", "Descripción creada y seleccionada correctamente.");
           return true;
@@ -829,18 +829,14 @@ export default function ModalNuevoIngreso({
         return;
       }
       const precio = safeNumber(item?.precio || 0);
-      const stockDisponible = getStockDisponible(item);
-      const sinStock = isSinStock(stockDisponible);
       updateRow(rowId, {
         id_detalle: String(getDetalleId(item) ?? ""),
         detalle: optionLabel(item),
         precio,
-        stock_disponible: stockDisponible,
-        sinStock,
-        cantidad: sinStock ? "" : 1,
+        stock_disponible: null,
+        sinStock: false,
+        cantidad: 1,
       });
-      if (sinStock)
-        showToast("advertencia", `El producto "${optionLabel(item)}" no tiene stock disponible.`);
     },
     [updateRow, showToast, handleCrearNuevaDescripcion]
   );
@@ -849,22 +845,8 @@ export default function ModalNuevoIngreso({
     (rowId, newCantidad) => {
       const row = rows.find((r) => r.id === rowId);
       if (!row) return;
-      if (row.sinStock || isSinStock(row.stock_disponible)) {
-        updateRow(rowId, { cantidad: "" });
-        return;
-      }
       let cantidadFinal = newCantidad === "" ? "" : Number(newCantidad);
       if (typeof cantidadFinal === "number" && cantidadFinal < 0) cantidadFinal = 0;
-      if (
-        row.stock_disponible !== null &&
-        row.stock_disponible !== undefined &&
-        row.stock_disponible !== "" &&
-        typeof cantidadFinal === "number" &&
-        cantidadFinal > Number(row.stock_disponible)
-      ) {
-        cantidadFinal = Number(row.stock_disponible);
-        showToast("advertencia", `Stock máximo disponible: ${row.stock_disponible}`);
-      }
       updateRow(rowId, { cantidad: cantidadFinal });
     },
     [rows, updateRow, showToast]
@@ -1246,16 +1228,10 @@ export default function ModalNuevoIngreso({
                   className={`mi-cr-table__rows${hasScroll ? " has-scroll" : ""}`}
                 >
                   {rowsCalc.map((r) => {
-                    const stockNum =
-                      r.stock_disponible !== null && r.stock_disponible !== undefined
-                        ? Number(r.stock_disponible)
-                        : null;
-                    const rowSinStock = r.sinStock || isSinStock(stockNum);
-
                     return (
                       <div
                         key={r.id}
-                        className={`mi-cr-row ${rowSinStock ? "mi-cr-row--sin-stock" : ""}`}
+                        className="mi-cr-row"
                       >
                         <div className="mi-cr-cell mi-cr-cell--detalle">
                           <GlobalAutocomplete
@@ -1284,32 +1260,19 @@ export default function ModalNuevoIngreso({
                           <input
                             className="nv-cell-input nv-cell-input--center"
                             type="number"
-                            min={rowSinStock ? undefined : "1"}
+                            min="1"
                             step="1"
-                            value={rowSinStock ? "" : r.cantidad}
+                            value={r.cantidad}
                             onChange={(e) =>
                               handleCantidadChange(
                                 r.id,
                                 e.target.value === "" ? "" : Number(e.target.value)
                               )
                             }
-                            disabled={saving || rowSinStock}
-                            placeholder={rowSinStock ? "0" : ""}
-                            title={
-                              rowSinStock
-                                ? "Sin stock disponible"
-                                : stockNum !== null
-                                ? `Stock disponible: ${stockNum}`
-                                : ""
-                            }
-                            style={{
-                              width: "100%",
-                              background: rowSinStock ? "#f3f4f6" : undefined,
-                              color: rowSinStock ? "#b91c1c" : undefined,
-                              borderColor: rowSinStock ? "#fca5a5" : undefined,
-                              cursor: rowSinStock ? "not-allowed" : undefined,
-                              opacity: rowSinStock ? 0.9 : 1,
-                            }}
+                            disabled={saving}
+                            placeholder=""
+                            title=""
+                            style={{ width: "100%" }}
                           />
                         </div>
 

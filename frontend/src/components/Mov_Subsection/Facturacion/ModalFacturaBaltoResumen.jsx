@@ -12,6 +12,12 @@ const DOC_TIPOS = [
   { id: 96, label: "DNI (96)" },
 ];
 
+// IMPORTANTE:
+// No usar [] directamente como valor default en props.
+// En React, ese array se recrea en cada render y rompe los useEffect que
+// dependen de configsFacturacionInicial, generando un bucle de setState.
+const EMPTY_CONFIGS_FACTURACION = Object.freeze([]);
+
 function isoToYmd8(iso) {
   const s = String(iso || "").trim();
   if (!s) return "";
@@ -139,6 +145,31 @@ function getAuthHeaders(extra = {}) {
   return headers;
 }
 
+function normalizeApiBase(apiBaseProp) {
+  const raw = String(apiBaseProp || "").trim();
+  if (!raw) return "";
+  return raw.replace(/\/+$/, "");
+}
+
+function buildApiUrl(apiBaseProp, params = {}) {
+  const base = normalizeApiBase(apiBaseProp);
+  if (!base) return "";
+
+  let finalUrl = "";
+  if (/\/routes$/i.test(base)) finalUrl = `${base}/api.php`;
+  else if (/\/api\.php$/i.test(base)) finalUrl = base;
+  else finalUrl = `${base}/routes/api.php`;
+
+  const usp = new URLSearchParams();
+  Object.entries(params || {}).forEach(([k, v]) => {
+    if (v === undefined || v === null || v === "") return;
+    usp.set(k, String(v));
+  });
+
+  const qs = usp.toString();
+  return qs ? `${finalUrl}?${qs}` : finalUrl;
+}
+
 async function parseJsonSafe(res) {
   const raw = await res.text();
   const trimmed = String(raw || "").trim();
@@ -224,6 +255,96 @@ function getCbteLabel(cbteTipo) {
   return `Comprobante (${cod})`;
 }
 
+
+function onlyDigits(v) {
+  return String(v ?? "").replace(/\D/g, "");
+}
+
+function configFacturacionId(cfg) {
+  return Number(cfg?.id_config_facturacion || cfg?.idConfigFacturacion || 0) || 0;
+}
+
+function normalizeConfigFacturacionRow(cfg) {
+  const c = cfg && typeof cfg === "object" ? cfg : {};
+  const id = configFacturacionId(c);
+  const cuit = onlyDigits(c?.cuit || c?.cuit_emisor || "");
+  const puntoVenta = onlyDigits(c?.punto_venta || c?.pto_vta || "") || "2";
+  const codigoComprobante = onlyDigits(c?.codigo_comprobante || c?.cbte_tipo || "") || "11";
+  const razon = pickText(c?.razon_social, c?.nombre_fantasia, c?.emisor_nombre, c?.nombre);
+  const domicilio = pickText(c?.domicilio_comercial, c?.domicilio, c?.domicilio_fiscal, c?.emisor_domicilio);
+  const condicionIva = pickText(c?.condicion_iva, c?.cond_iva, c?.cond_iva_emisor);
+  const inicio = pickText(c?.fecha_inicio_actividades, c?.inicio_actividades, c?.fecha_inicio_actividades_emisor);
+
+  return {
+    ...c,
+    idConfigFacturacion: id,
+    id_config_facturacion: id,
+    razon_social: razon,
+    nombre_fantasia: pickText(c?.nombre_fantasia, razon),
+    cuit,
+    cuit_emisor: cuit,
+    ingresos_brutos: pickText(c?.ingresos_brutos, c?.ingresos_brutos_emisor),
+    condicion_iva: condicionIva,
+    cond_iva: condicionIva,
+    domicilio_comercial: domicilio,
+    domicilio,
+    domicilio_fiscal: domicilio,
+    fecha_inicio_actividades: inicio,
+    inicio_actividades: inicio,
+    punto_venta: String(puntoVenta).padStart(5, "0"),
+    pto_vta: Number(puntoVenta) || 2,
+    codigo_comprobante: String(codigoComprobante).padStart(3, "0"),
+    cbte_tipo: Number(codigoComprobante) || 11,
+    activo: Number(c?.activo ?? 1) === 0 ? 0 : 1,
+  };
+}
+
+function configFacturacionLabel(cfg) {
+  const c = normalizeConfigFacturacionRow(cfg || {});
+  const razon = pickText(c.razon_social, c.nombre_fantasia, "Cuenta fiscal");
+  const cuit = c.cuit ? `CUIT ${c.cuit}` : "sin CUIT";
+  const pv = onlyDigits(c.punto_venta || c.pto_vta || "") || "—";
+  return `${razon} — ${cuit} — PV ${pv}`;
+}
+
+function extractConfigsFacturacionFromResponse(json) {
+  const candidates = [
+    json?.configs,
+    json?.data?.configs,
+    json?.cuentas_fiscales,
+    json?.data?.cuentas_fiscales,
+    json?.cuentas,
+    json?.data?.cuentas,
+    json?.configuraciones,
+    json?.data?.configuraciones,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+  }
+  return [];
+}
+
+function mergeConfigsFacturacion(...lists) {
+  const out = [];
+  const seen = new Set();
+
+  lists.flat().forEach((cfg) => {
+    const normalized = normalizeConfigFacturacionRow(cfg || {});
+    if (normalized.activo === 0) return;
+
+    const id = configFacturacionId(normalized);
+    const cuit = onlyDigits(normalized?.cuit || normalized?.cuit_emisor || "");
+    const key = id > 0 ? `id:${id}` : (cuit ? `cuit:${cuit}` : JSON.stringify(normalized));
+
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(normalized);
+  });
+
+  return out;
+}
+
 export default function ModalFacturaBaltoResumen({
   open,
   onClose,
@@ -242,6 +363,7 @@ export default function ModalFacturaBaltoResumen({
   testAmount = 1000,
   skipMovimientoAutocreacion = false,
   pdfMode = "factura",
+  configsFacturacionInicial = EMPTY_CONFIGS_FACTURACION,
 }) {
   const [loading, setLoading] = useState(false);
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -254,44 +376,230 @@ export default function ModalFacturaBaltoResumen({
   const movimientoIdRef = useRef(0);
   const cbteNoEmitidoRef = useRef(null);
 
+  const apiUrl = useCallback(
+    (params = {}) => buildApiUrl(apiBase, params),
+    [apiBase]
+  );
+
   const esNotaCredito = pdfMode === "nota_credito";
   const esCbteNC = [3, 8, 13].includes(Number(cbteTipo || 0));
   const usarModoNC = esNotaCredito || esCbteNC;
+
+  const [configsFacturacion, setConfigsFacturacion] = useState([]);
+  const [selectedConfigId, setSelectedConfigId] = useState("");
+  const [configLoading, setConfigLoading] = useState(false);
+  const [configError, setConfigError] = useState("");
+
+  const dataConfigInicial = useMemo(
+    () => normalizeConfigFacturacionRow(data?.config_facturacion || data?.emisor || {}),
+    [data]
+  );
+
+  useEffect(() => {
+    if (!open) return;
+
+    const idInicial = configFacturacionId(data?.config_facturacion || data?.emisor || {});
+    if (idInicial > 0) setSelectedConfigId(String(idInicial));
+
+    const iniciales = mergeConfigsFacturacion(configsFacturacionInicial, dataConfigInicial);
+
+    if (usarModoNC) {
+      const cuitInicial = onlyDigits(
+        data?.cuit_emisor ||
+        data?.config_facturacion?.cuit ||
+        data?.emisor?.cuit ||
+        data?.factura_original?.cuit_emisor ||
+        data?.factura_original?.cuit ||
+        ""
+      );
+
+      const matchLocal = iniciales.find((cfg) => {
+        const cfgId = configFacturacionId(cfg);
+        const cfgCuit = onlyDigits(cfg?.cuit || cfg?.cuit_emisor || "");
+        return (idInicial > 0 && cfgId === idInicial) || (cuitInicial && cfgCuit === cuitInicial);
+      });
+
+      const listaLocal = mergeConfigsFacturacion(matchLocal || null, iniciales, dataConfigInicial);
+      setConfigsFacturacion(listaLocal);
+
+      const selectedLocal = configFacturacionId(matchLocal || dataConfigInicial || listaLocal[0]);
+      if (selectedLocal > 0) setSelectedConfigId(String(selectedLocal));
+
+      const nombreLocal = pickText(matchLocal?.razon_social, matchLocal?.nombre_fantasia, dataConfigInicial?.razon_social);
+      const tieneNombreReal = nombreLocal && nombreLocal.toUpperCase() !== "BALTO";
+      if (tieneNombreReal || !apiUrl({ action: "config_facturacion_get" })) {
+        setConfigError("");
+        setConfigLoading(false);
+        return;
+      }
+
+      let cancelled = false;
+      async function cargarConfigNC() {
+        setConfigLoading(true);
+        setConfigError("");
+        try {
+          const res = await fetch(apiUrl({ action: "config_facturacion_get" }), {
+            method: "GET",
+            headers: getAuthHeaders(),
+          });
+          const json = await parseJsonSafe(res);
+          if (cancelled) return;
+
+          const all = mergeConfigsFacturacion(
+            extractConfigsFacturacionFromResponse(json),
+            normalizeConfigFacturacionRow(json?.config || json?.data?.config || {}),
+            listaLocal
+          );
+
+          const matchApi = all.find((cfg) => {
+            const cfgId = configFacturacionId(cfg);
+            const cfgCuit = onlyDigits(cfg?.cuit || cfg?.cuit_emisor || "");
+            return (idInicial > 0 && cfgId === idInicial) || (cuitInicial && cfgCuit === cuitInicial);
+          });
+
+          const finalList = mergeConfigsFacturacion(matchApi || null, all);
+          setConfigsFacturacion(finalList);
+
+          const selectedApi = configFacturacionId(matchApi || finalList[0]);
+          if (selectedApi > 0) setSelectedConfigId(String(selectedApi));
+        } catch (e) {
+          if (cancelled) return;
+          setConfigError(e?.message || "No se pudo resolver la cuenta fiscal de la nota de crédito.");
+          setConfigsFacturacion(listaLocal);
+        } finally {
+          if (!cancelled) setConfigLoading(false);
+        }
+      }
+
+      cargarConfigNC();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (iniciales.length) {
+      setConfigsFacturacion(iniciales);
+      const initialSelected = idInicial > 0 ? idInicial : configFacturacionId(iniciales[0]);
+      if (initialSelected > 0) setSelectedConfigId(String(initialSelected));
+    }
+
+    // Si el modal padre ya trajo más de una cuenta fiscal, no volvemos a consultar
+    // el endpoint al abrir el resumen. Esto evita que una falla momentánea de red/CORS
+    // deje el selector bloqueado o muestre el aviso global de "Sin conexión".
+    if (iniciales.length > 1) {
+      setConfigLoading(false);
+      setConfigError("");
+      return;
+    }
+
+    let cancelled = false;
+    async function cargarConfigs() {
+      setConfigLoading(true);
+      setConfigError("");
+      try {
+        const url = apiUrl({ action: "config_facturacion_get" });
+        const res = await fetch(url, {
+          method: "GET",
+          headers: getAuthHeaders(),
+        });
+        const json = await parseJsonSafe(res);
+        if (cancelled) return;
+
+        const cfgDefault = normalizeConfigFacturacionRow(json?.config || json?.data?.config || {});
+        const finalList = mergeConfigsFacturacion(
+          extractConfigsFacturacionFromResponse(json),
+          cfgDefault,
+          iniciales
+        );
+
+        setConfigsFacturacion(finalList);
+
+        const currentId = idInicial > 0
+          ? idInicial
+          : (configFacturacionId(cfgDefault) || configFacturacionId(finalList[0]));
+        if (currentId > 0) setSelectedConfigId(String(currentId));
+      } catch (e) {
+        if (cancelled) return;
+        setConfigError(e?.message || "No se pudieron cargar las cuentas fiscales.");
+        setConfigsFacturacion(iniciales);
+      } finally {
+        if (!cancelled) setConfigLoading(false);
+      }
+    }
+
+    cargarConfigs();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, apiUrl, usarModoNC, data, dataConfigInicial, configsFacturacionInicial]);
+
+  const configSeleccionada = useMemo(() => {
+    const byId = configsFacturacion.find((cfg) => String(configFacturacionId(cfg)) === String(selectedConfigId));
+    if (byId) return normalizeConfigFacturacionRow(byId);
+    if (configFacturacionId(dataConfigInicial)) return dataConfigInicial;
+    if (configsFacturacion[0]) return normalizeConfigFacturacionRow(configsFacturacion[0]);
+    return normalizeConfigFacturacionRow({});
+  }, [configsFacturacion, selectedConfigId, dataConfigInicial]);
+
+  const cbteTipoEfectivo = useMemo(() => {
+    if (usarModoNC) return Number(cbteTipo || 13) || 13;
+    return Number(configSeleccionada?.cbte_tipo || onlyDigits(configSeleccionada?.codigo_comprobante) || cbteTipo || 11) || 11;
+  }, [usarModoNC, cbteTipo, configSeleccionada]);
+
+  const ptoVtaEfectivo = useMemo(() => {
+    if (usarModoNC) return Number(ptoVta || data?.pto_vta || 2) || 2;
+    return Number(configSeleccionada?.pto_vta || onlyDigits(configSeleccionada?.punto_venta) || ptoVta || 2) || 2;
+  }, [usarModoNC, ptoVta, data?.pto_vta, configSeleccionada]);
+
+  const dataFacturacion = useMemo(() => ({
+    ...(data || {}),
+    config_facturacion: configSeleccionada,
+    id_config_facturacion: configFacturacionId(configSeleccionada) || null,
+    idConfigFacturacion: configFacturacionId(configSeleccionada) || null,
+    cbte_tipo: cbteTipoEfectivo,
+    pto_vta: ptoVtaEfectivo,
+    emisor_nombre: pickText(configSeleccionada?.razon_social, data?.emisor_nombre),
+    emisor_domicilio: pickText(configSeleccionada?.domicilio_comercial, data?.emisor_domicilio),
+    cuit_emisor: pickText(configSeleccionada?.cuit, data?.cuit_emisor),
+    cond_iva_emisor: pickText(configSeleccionada?.condicion_iva, data?.cond_iva_emisor),
+    ingresos_brutos_emisor: pickText(configSeleccionada?.ingresos_brutos, data?.ingresos_brutos_emisor),
+    fecha_inicio_actividades_emisor: pickText(configSeleccionada?.fecha_inicio_actividades, data?.fecha_inicio_actividades_emisor),
+  }), [data, configSeleccionada, cbteTipoEfectivo, ptoVtaEfectivo]);
 
   const docLabel = useMemo(() => {
     const it = DOC_TIPOS.find((x) => x.id === Number(docTipo));
     return it?.label || String(docTipo ?? "");
   }, [docTipo]);
 
-  const idPago = data?.id_pago ?? null;
-  const idSistema = data?.id_sistema ?? null;
+  const idPago = dataFacturacion?.id_pago ?? null;
+  const idSistema = dataFacturacion?.id_sistema ?? null;
 
-  const emisorInfo = useMemo(() => normalizeEmisorPdfInfo(data || {}), [data]);
+  const emisorInfo = useMemo(() => normalizeEmisorPdfInfo(dataFacturacion || {}), [dataFacturacion]);
   const clienteFacturaInfo = useMemo(
-    () => normalizeClienteFacturacionPdfInfo(data || {}, { doc_tipo: docTipo, doc_nro: docNro }),
-    [data, docTipo, docNro]
+    () => normalizeClienteFacturacionPdfInfo(dataFacturacion || {}, { doc_tipo: docTipo, doc_nro: docNro }),
+    [dataFacturacion, docTipo, docNro]
   );
 
   const nombreCliente =
     clienteFacturaInfo?.razon_social ||
-    data?.labelCliente ||
-    data?.cliente ||
+    dataFacturacion?.labelCliente ||
+    dataFacturacion?.cliente ||
     "—";
 
-  const nombreSistema = data?.labelSistema || data?.sistema || "—";
+  const nombreSistema = dataFacturacion?.labelSistema || dataFacturacion?.sistema || "—";
 
   const items = useMemo(
-    () => (Array.isArray(data?.items_facturacion) ? data.items_facturacion : []),
-    [data]
+    () => (Array.isArray(dataFacturacion?.items_facturacion) ? dataFacturacion.items_facturacion : []),
+    [dataFacturacion]
   );
 
   const primerItem = useMemo(() => items?.[0] || {}, [items]);
 
-  const montoReal = Number(data?.total_ars ?? data?.monto ?? data?.importe ?? 0);
+  const montoReal = Number(dataFacturacion?.total_ars ?? dataFacturacion?.monto ?? dataFacturacion?.importe ?? 0);
   const monto = forceTestAmount ? Number(testAmount) : montoReal;
 
-  const fechaCbteISO = String(data?.fecha_cbte_iso ?? "").slice(0, 10);
-  const vtoPagoISO = String(data?.vto_pago_iso ?? "").slice(0, 10);
+  const fechaCbteISO = String(dataFacturacion?.fecha_cbte_iso ?? "").slice(0, 10);
+  const vtoPagoISO = String(dataFacturacion?.vto_pago_iso ?? "").slice(0, 10);
 
   const emisorNombre = emisorInfo.emisor_nombre;
   const emisorDomicilio = emisorInfo.emisor_domicilio;
@@ -302,7 +610,7 @@ export default function ModalFacturaBaltoResumen({
 
   const resumen = useMemo(() => {
     const doc = String(docNro ?? "").replace(/\D/g, "");
-    const pv = String(ptoVta ?? "").replace(/\D/g, "");
+    const pv = String(ptoVtaEfectivo ?? "").replace(/\D/g, "");
     return {
       pago: idPago ? String(idPago) : "—",
       sistemaId: idSistema ? String(idSistema) : "—",
@@ -311,12 +619,12 @@ export default function ModalFacturaBaltoResumen({
       fechaISO: fechaCbteISO,
       vtoISO: vtoPagoISO,
       montoTxt: moneyARS(monto),
-      comprobante: getCbteLabel(cbteTipo),
+      comprobante: getCbteLabel(cbteTipoEfectivo),
       receptorTxt: doc ? `${docLabel}: ${doc}` : "—",
       pvTxt: pv || "—",
       iva: clienteFacturaInfo?.cond_iva || clienteFacturaInfo?.condicion_iva || "—",
       domicilio: clienteFacturaInfo?.domicilio || "—",
-      observaciones: safeText(data?.observaciones),
+      observaciones: safeText(dataFacturacion?.observaciones),
     };
   }, [
     idPago,
@@ -327,11 +635,11 @@ export default function ModalFacturaBaltoResumen({
     vtoPagoISO,
     monto,
     docNro,
-    ptoVta,
+    ptoVtaEfectivo,
     docLabel,
     clienteFacturaInfo,
-    data,
-    cbteTipo,
+    dataFacturacion,
+    cbteTipoEfectivo,
   ]);
 
   const obtenerCbteNoEmitido = useCallback(async () => {
@@ -342,7 +650,7 @@ export default function ModalFacturaBaltoResumen({
     }
 
     const res = await fetch(
-      `${apiBase}?action=comprobantes_proximo_numero_no_emitido&tipo=FACTURA`,
+      apiUrl({ action: "comprobantes_proximo_numero_no_emitido", tipo: "FACTURA" }),
       {
         method: "GET",
         headers: getAuthHeaders(),
@@ -358,17 +666,17 @@ export default function ModalFacturaBaltoResumen({
 
     cbteNoEmitidoRef.current = nro;
     return nro;
-  }, [apiBase, usarModoNC]);
+  }, [apiUrl, usarModoNC]);
 
   useEffect(() => {
     if (!open) return;
     setError("");
     setConfirm(false);
     setTabActiva("resumen");
-    movimientoIdRef.current = Number(data?.id_movimiento || 0) || 0;
+    movimientoIdRef.current = Number(dataFacturacion?.id_movimiento || 0) || 0;
     cbteNoEmitidoRef.current = null;
     setTimeout(() => firstRef.current?.focus?.(), 0);
-  }, [open, data]);
+  }, [open, dataFacturacion]);
 
 useEffect(() => {
   if (!open) return;
@@ -406,7 +714,7 @@ useEffect(() => {
       try {
         if (usarModoNC) {
           const built = await buildNotaCreditoPdf({
-            ...data,
+            ...dataFacturacion,
             labelCliente: nombreCliente,
             labelSistema: nombreSistema,
             fecha_cbte_iso: fechaCbteISO || todayLocalISO(),
@@ -415,10 +723,10 @@ useEffect(() => {
             total_ars: monto,
             monto,
             importe: monto,
-            cbte_tipo: Number(cbteTipo) || 13,
-            pto_vta: Number(ptoVta) || 2,
-            cliente_facturacion: clienteFacturaInfo || data?.cliente_facturacion || {},
-            config_facturacion: data?.config_facturacion || {},
+            cbte_tipo: Number(cbteTipoEfectivo) || 13,
+            pto_vta: Number(ptoVtaEfectivo) || 2,
+            cliente_facturacion: clienteFacturaInfo || dataFacturacion?.cliente_facturacion || {},
+            config_facturacion: configSeleccionada || dataFacturacion?.config_facturacion || {},
             items_facturacion: items,
             emisor_nombre: emisorNombre || "BALTO",
             emisor_domicilio: emisorDomicilio || "",
@@ -427,8 +735,8 @@ useEffect(() => {
             ingresos_brutos_emisor: emisorIibb || "",
             fecha_inicio_actividades_emisor: emisorFechaInicio || "",
             emisor: emisorInfo?.emisor || null,
-            observaciones: data?.observaciones || "",
-            factura_original: data?.factura_original || null,
+            observaciones: dataFacturacion?.observaciones || "",
+            factura_original: dataFacturacion?.factura_original || null,
             cae: "",
             cae_vto: "",
             resultado: "P",
@@ -447,8 +755,8 @@ useEffect(() => {
           const cbteNroLocal = await obtenerCbteNoEmitido();
 
           const factMock = {
-            pto_vta: Number(ptoVta) || 2,
-            cbte_tipo: Number(cbteTipo) || 11,
+            pto_vta: Number(ptoVtaEfectivo) || 2,
+            cbte_tipo: Number(cbteTipoEfectivo) || 11,
             cbte_nro: cbteNroLocal,
             fecha_cbte: isoToYmd8(
               fechaCbteISO || todayLocalISO()
@@ -470,7 +778,7 @@ useEffect(() => {
             receptor_nombre:
               clienteFacturaInfo?.razon_social || nombreCliente,
             receptor_domicilio:
-              clienteFacturaInfo?.domicilio || data?.cliente_domicilio || "",
+              clienteFacturaInfo?.domicilio || dataFacturacion?.cliente_domicilio || "",
             cond_iva_receptor:
               clienteFacturaInfo?.cond_iva || clienteFacturaInfo?.condicion_iva || "",
             doc_tipo: Number(docTipo),
@@ -480,7 +788,7 @@ useEffect(() => {
           const doc = await buildBaltoInvoicePdf({
             fact: factMock,
             data: {
-              ...data,
+              ...dataFacturacion,
               labelCliente: nombreCliente,
               labelSistema: nombreSistema,
               fecha_cbte: isoToYmd8(fechaCbteISO),
@@ -488,8 +796,8 @@ useEffect(() => {
               total_ars: monto,
               monto,
               importe: monto,
-              cliente_facturacion: clienteFacturaInfo || data?.cliente_facturacion || {},
-              config_facturacion: data?.config_facturacion || {},
+              cliente_facturacion: clienteFacturaInfo || dataFacturacion?.cliente_facturacion || {},
+              config_facturacion: configSeleccionada || dataFacturacion?.config_facturacion || {},
               emisor: emisorInfo?.emisor || null,
               items_facturacion: items,
             },
@@ -516,11 +824,11 @@ useEffect(() => {
     };
   }, [
     open,
-    data,
+    dataFacturacion,
     docTipo,
     docNro,
-    cbteTipo,
-    ptoVta,
+    cbteTipoEfectivo,
+    ptoVtaEfectivo,
     nombreCliente,
     nombreSistema,
     monto,
@@ -539,6 +847,7 @@ useEffect(() => {
     emisorFechaInicio,
     usarModoNC,
     obtenerCbteNoEmitido,
+    configSeleccionada,
   ]);
 
   const toText = useCallback((v) => {
@@ -589,10 +898,14 @@ useEffect(() => {
 
   const validar = useCallback(() => {
     const doc = String(docNro ?? "").replace(/\D/g, "");
-    const pv = String(ptoVta ?? "").replace(/\D/g, "");
+    const pv = String(ptoVtaEfectivo ?? "").replace(/\D/g, "");
 
     if (!doc) return { ok: false, msg: "Falta documento." };
     if (!pv) return { ok: false, msg: "Falta punto de venta." };
+
+    if (!usarModoNC && !safeText(configSeleccionada?.cuit)) {
+      return { ok: false, msg: "Seleccioná una cuenta fiscal válida para emitir." };
+    }
 
     if (Number(docTipo) === 96 && !(doc.length === 7 || doc.length === 8)) {
       return { ok: false, msg: "DNI inválido (7 u 8 dígitos)." };
@@ -602,18 +915,18 @@ useEffect(() => {
       return { ok: false, msg: "CUIT inválido (11 dígitos)." };
     }
 
-    if (!safeText(data?.cliente_facturacion?.razon_social)) {
+    if (!safeText(dataFacturacion?.cliente_facturacion?.razon_social)) {
       return { ok: false, msg: "Falta razón social / apellido y nombre del cliente." };
     }
 
     if (
-      !safeText(data?.cliente_facturacion?.cond_iva) &&
-      !safeText(data?.cliente_facturacion?.condicion_iva)
+      !safeText(dataFacturacion?.cliente_facturacion?.cond_iva) &&
+      !safeText(dataFacturacion?.cliente_facturacion?.condicion_iva)
     ) {
       return { ok: false, msg: "Falta condición frente al IVA del cliente." };
     }
 
-    if (!safeText(data?.cliente_facturacion?.domicilio)) {
+    if (!safeText(dataFacturacion?.cliente_facturacion?.domicilio)) {
       return { ok: false, msg: "Falta domicilio del cliente." };
     }
 
@@ -647,9 +960,11 @@ useEffect(() => {
       id_sistema: idSistema ? Number(idSistema) : null,
     };
   }, [
-    data,
+    dataFacturacion,
+    configSeleccionada,
+    usarModoNC,
     docNro,
-    ptoVta,
+    ptoVtaEfectivo,
     docTipo,
     idPago,
     idSistema,
@@ -661,7 +976,7 @@ useEffect(() => {
 
   const buildMovimientoPayload = useCallback(() => {
     const idDetalle =
-      toNumberOrNull(data?.id_detalle) ??
+      toNumberOrNull(dataFacturacion?.id_detalle) ??
       toNumberOrNull(primerItem?.id_detalle) ??
       toNumberOrNull(primerItem?.id) ??
       null;
@@ -685,11 +1000,11 @@ useEffect(() => {
 
     return {
       fecha: fechaCbteISO,
-      periodo: safeText(data?.periodo) || String(fechaCbteISO || "").slice(0, 7),
-      id_clasificacion: toNumberOrNull(data?.id_clasificacion),
-      id_tipo_venta: toNumberOrNull(data?.id_tipo_venta),
-      id_medio_pago: toNumberOrNull(data?.id_medio_pago),
-      id_cliente: toNumberOrNull(data?.id_cliente),
+      periodo: safeText(dataFacturacion?.periodo) || String(fechaCbteISO || "").slice(0, 7),
+      id_clasificacion: toNumberOrNull(dataFacturacion?.id_clasificacion),
+      id_tipo_venta: toNumberOrNull(dataFacturacion?.id_tipo_venta),
+      id_medio_pago: toNumberOrNull(dataFacturacion?.id_medio_pago),
+      id_cliente: toNumberOrNull(dataFacturacion?.id_cliente),
       id_detalle: idDetalle,
       monto_total: Number(monto) || total,
       cantidad,
@@ -699,12 +1014,12 @@ useEffect(() => {
       iva_monto: ivaMonto,
       total,
     };
-  }, [data, primerItem, monto, fechaCbteISO]);
+  }, [dataFacturacion, primerItem, monto, fechaCbteISO]);
 
   const ensureMovimientoGuardado = useCallback(async () => {
     if (skipMovimientoAutocreacion) return null;
 
-    const ya = Number(movimientoIdRef.current || data?.id_movimiento || 0) || 0;
+    const ya = Number(movimientoIdRef.current || dataFacturacion?.id_movimiento || 0) || 0;
     if (ya > 0) return ya;
 
     const createAction = resolveMovimientoCreateAction(action);
@@ -720,7 +1035,7 @@ useEffect(() => {
       throw new Error("No se puede guardar la venta: falta id_detalle.");
     }
 
-    const resp = await fetchJSON(`${apiBase}?action=${encodeURIComponent(createAction)}`, {
+    const resp = await fetchJSON(apiUrl({ action: createAction }), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -739,10 +1054,10 @@ useEffect(() => {
     return newId;
   }, [
     skipMovimientoAutocreacion,
-    data?.id_movimiento,
+    dataFacturacion?.id_movimiento,
     action,
     buildMovimientoPayload,
-    apiBase,
+    apiUrl,
     fetchJSON,
   ]);
 
@@ -786,24 +1101,26 @@ useEffect(() => {
         domicilio: clienteFacturaInfo?.domicilio || null,
         cliente_facturacion: clienteFacturaInfo || null,
         emisor: emisorInfo?.emisor || null,
-        config_facturacion: data?.config_facturacion || null,
+        config_facturacion: configSeleccionada || dataFacturacion?.config_facturacion || null,
+        id_config_facturacion: configFacturacionId(configSeleccionada) || dataFacturacion?.id_config_facturacion || null,
+        cuit_emisor: emisorCuit || configSeleccionada?.cuit || null,
 
-        items_facturacion: Array.isArray(data?.items_facturacion)
-          ? data.items_facturacion
+        items_facturacion: Array.isArray(dataFacturacion?.items_facturacion)
+          ? dataFacturacion.items_facturacion
           : [],
         total_ars: emitidoEnArca
-          ? Number(fact?.imp_total ?? fact?.importe ?? data?.total_ars ?? data?.monto ?? 0)
-          : Number(data?.total_ars ?? data?.monto ?? data?.importe ?? 0),
+          ? Number(fact?.imp_total ?? fact?.importe ?? dataFacturacion?.total_ars ?? dataFacturacion?.monto ?? 0)
+          : Number(dataFacturacion?.total_ars ?? dataFacturacion?.monto ?? dataFacturacion?.importe ?? 0),
         monto_ars: emitidoEnArca
-          ? Number(fact?.imp_total ?? fact?.importe ?? data?.monto ?? 0)
-          : Number(data?.monto ?? data?.total_ars ?? data?.importe ?? 0),
-        observaciones: data?.observaciones ?? "",
+          ? Number(fact?.imp_total ?? fact?.importe ?? dataFacturacion?.monto ?? 0)
+          : Number(dataFacturacion?.monto ?? dataFacturacion?.total_ars ?? dataFacturacion?.importe ?? 0),
+        observaciones: dataFacturacion?.observaciones ?? "",
         vto_pago: isoToYmd8(vtoPagoISO) || null,
 
         doc_tipo: Number(docTipo) || null,
         doc_nro: String(docNro || "").replace(/\D/g, "") || null,
-        cbte_tipo: Number(cbteTipo) || null,
-        pto_vta: Number(ptoVta) || null,
+        cbte_tipo: Number(cbteTipoEfectivo) || null,
+        pto_vta: Number(ptoVtaEfectivo) || null,
 
         anio: emitidoEnArca ? Number(fact?.anio || 0) : null,
         id_mes: emitidoEnArca ? Number(fact?.id_mes || 0) : null,
@@ -827,7 +1144,7 @@ useEffect(() => {
 
       fd.append("meta", JSON.stringify(meta));
 
-      const res = await fetch(`${apiBase}?action=comprobantes_vincular_movimiento`, {
+      const res = await fetch(apiUrl({ action: "comprobantes_vincular_movimiento" }), {
         method: "POST",
         body: fd,
         headers: getAuthHeaders(),
@@ -851,14 +1168,16 @@ useEffect(() => {
       return j || {};
     },
     [
-      apiBase,
-      data,
+      apiUrl,
+      dataFacturacion,
+      configSeleccionada,
       clienteFacturaInfo,
       emisorInfo,
+      emisorCuit,
       docTipo,
       docNro,
-      cbteTipo,
-      ptoVta,
+      cbteTipoEfectivo,
+      ptoVtaEfectivo,
       vtoPagoISO,
       fechaCbteISO,
       idPago,
@@ -901,7 +1220,7 @@ useEffect(() => {
         ? null
         : await ensureMovimientoGuardado();
 
-      const url = `${apiBase}?action=wsfe_emitir`;
+      const url = apiUrl({ action: "wsfe_emitir" });
 
       const body = {
         data: {
@@ -918,7 +1237,7 @@ useEffect(() => {
 
           doc_tipo: Number(docTipo),
           doc_nro: v.docN,
-          cbte_tipo: Number(cbteTipo),
+          cbte_tipo: Number(cbteTipoEfectivo),
           pto_vta: v.pvN,
 
           razon_social: clienteFacturaInfo?.razon_social || null,
@@ -941,12 +1260,14 @@ useEffect(() => {
           vto_pago: isoToYmd8(vtoPagoISO),
 
           items_facturacion: items,
-          observaciones: data?.observaciones || "",
-          concepto: data?.concepto ?? 1,
-          config_facturacion: data?.config_facturacion || null,
+          observaciones: dataFacturacion?.observaciones || "",
+          concepto: dataFacturacion?.concepto ?? 1,
+          id_config_facturacion: configFacturacionId(configSeleccionada) || null,
+          idConfigFacturacion: configFacturacionId(configSeleccionada) || null,
+          config_facturacion: configSeleccionada || dataFacturacion?.config_facturacion || null,
           emisor: emisorInfo?.emisor || null,
 
-          cbtes_asoc: Array.isArray(data?.cbtes_asoc) ? data.cbtes_asoc : [],
+          cbtes_asoc: Array.isArray(dataFacturacion?.cbtes_asoc) ? dataFacturacion.cbtes_asoc : [],
 
           emisor_nombre: emisorNombre || null,
           emisor_domicilio: emisorDomicilio || null,
@@ -965,7 +1286,7 @@ useEffect(() => {
 
       const fact = normalizeFacturaEmitida(resp, {
         pto_vta: v.pvN,
-        cbte_tipo: Number(cbteTipo),
+        cbte_tipo: Number(cbteTipoEfectivo),
         fecha_cbte: fechaCbteISO,
         doc_tipo: Number(docTipo),
         doc_nro: String(v.docN),
@@ -977,7 +1298,7 @@ useEffect(() => {
 
       if (usarModoNC) {
         const pdfData = {
-          ...data,
+          ...dataFacturacion,
           id_movimiento: idMovimiento,
           labelCliente: nombreCliente,
           labelSistema: nombreSistema,
@@ -987,8 +1308,8 @@ useEffect(() => {
           total_ars: Number(fact?.imp_total || monto),
           monto: Number(fact?.imp_total || monto),
           importe: Number(fact?.imp_total || monto),
-          cbte_tipo: Number(fact?.cbte_tipo || cbteTipo || 13),
-          pto_vta: Number(fact?.pto_vta || ptoVta || 2),
+          cbte_tipo: Number(fact?.cbte_tipo || cbteTipoEfectivo || 13),
+          pto_vta: Number(fact?.pto_vta || ptoVtaEfectivo || 2),
           cbte_nro: Number(fact?.cbte_nro || 0),
           cae: fact?.cae || "",
           cae_vto: fact?.cae_vto || "",
@@ -996,10 +1317,11 @@ useEffect(() => {
           qr_url: fact?.qr_url || "",
           qr_base64: fact?.qr_base64 || "",
           qr_payload: fact?.qr_payload || null,
-          cliente_facturacion: clienteFacturaInfo || data?.cliente_facturacion || {},
-          config_facturacion: data?.config_facturacion || {},
+          cliente_facturacion: clienteFacturaInfo || dataFacturacion?.cliente_facturacion || {},
+          config_facturacion: configSeleccionada || dataFacturacion?.config_facturacion || {},
+          id_config_facturacion: configFacturacionId(configSeleccionada) || dataFacturacion?.id_config_facturacion || null,
           items_facturacion: items,
-          observaciones: data?.observaciones || "",
+          observaciones: dataFacturacion?.observaciones || "",
           emisor_nombre: emisorNombre || "BALTO",
           emisor_domicilio: emisorDomicilio || "",
           cuit_emisor: emisorCuit || "",
@@ -1044,6 +1366,9 @@ useEffect(() => {
         const factFinal = {
           ...fact,
           emitido_en_arca: 1,
+          id_config_facturacion: configFacturacionId(configSeleccionada) || dataFacturacion?.id_config_facturacion || null,
+          config_facturacion: configSeleccionada || dataFacturacion?.config_facturacion || null,
+          cuit_emisor: emisorCuit || configSeleccionada?.cuit || fact?.cuit_emisor || null,
           json_arca: fact?.raw_min || fact || null,
           id_movimiento: idMovimiento,
           id_comprobante: idComprobante,
@@ -1080,14 +1405,15 @@ useEffect(() => {
               fact?.cond_iva_receptor,
           },
           data: {
-            ...data,
+            ...dataFacturacion,
             id_movimiento: idMovimiento,
             labelCliente: nombreCliente,
             labelSistema: nombreSistema,
             fecha_cbte: isoToYmd8(fact?.fecha_cbte || fechaCbteISO),
             vto_pago: isoToYmd8(vtoPagoISO),
-            cliente_facturacion: clienteFacturaInfo || data?.cliente_facturacion || {},
-            config_facturacion: data?.config_facturacion || {},
+            cliente_facturacion: clienteFacturaInfo || dataFacturacion?.cliente_facturacion || {},
+            config_facturacion: configSeleccionada || dataFacturacion?.config_facturacion || {},
+            id_config_facturacion: configFacturacionId(configSeleccionada) || dataFacturacion?.id_config_facturacion || null,
             emisor: emisorInfo?.emisor || null,
             items_facturacion: items,
             total_ars: Number(fact?.imp_total || monto),
@@ -1133,6 +1459,9 @@ useEffect(() => {
         const factFinal = {
           ...fact,
           emitido_en_arca: 1,
+          id_config_facturacion: configFacturacionId(configSeleccionada) || dataFacturacion?.id_config_facturacion || null,
+          config_facturacion: configSeleccionada || dataFacturacion?.config_facturacion || null,
+          cuit_emisor: emisorCuit || configSeleccionada?.cuit || fact?.cuit_emisor || null,
           json_arca: fact?.raw_min || fact || null,
           id_movimiento: idMovimiento,
           id_comprobante: idComprobante,
@@ -1153,10 +1482,12 @@ useEffect(() => {
     confirm,
     skipMovimientoAutocreacion,
     ensureMovimientoGuardado,
-    apiBase,
+    apiUrl,
     docTipo,
-    cbteTipo,
-    data,
+    cbteTipoEfectivo,
+    ptoVtaEfectivo,
+    dataFacturacion,
+    configSeleccionada,
     forceTestAmount,
     testAmount,
     monto,
@@ -1178,7 +1509,6 @@ useEffect(() => {
     finalizarUnaSolaVez,
     onCloseAll,
     usarModoNC,
-    ptoVta,
   ]);
 
   if (!open) return null;
@@ -1261,6 +1591,46 @@ useEffect(() => {
                     </strong>
                   </div>
 
+                  {!usarModoNC && (
+                    <div className="fl-grid" style={{ marginTop: 12, marginBottom: 12 }}>
+                      <div className="fl-field fl-col-full">
+                        <select
+                          className="fl-input fl-select"
+                          value={selectedConfigId}
+                          onChange={(e) => {
+                            setSelectedConfigId(e.target.value);
+                            setConfirm(false);
+                            setError("");
+                          }}
+                          disabled={loading}
+                        >
+                          {!configsFacturacion.length && (
+                            <option value="">Sin cuentas fiscales activas</option>
+                          )}
+                          {configsFacturacion.map((cfg) => {
+                            const id = configFacturacionId(cfg);
+                            return (
+                              <option key={id || cfg.cuit || configFacturacionLabel(cfg)} value={String(id)}>
+                                {configFacturacionLabel(cfg)}
+                              </option>
+                            );
+                          })}
+                        </select>
+                        <label className="fl-label">Cuenta fiscal emisora *</label>
+                      </div>
+
+                      {configLoading && (
+                        <div className="arca-mini fl-col-full">Cargando cuentas fiscales...</div>
+                      )}
+
+                      {configError && (
+                        <div className="arca-alert arca-alert--error fl-col-full" role="alert">
+                          {configError}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="arca-resumen-grid">
                     <div className="arca-col">
                       <div className="arca-row"><b>Cliente:</b><span>{resumen.cliente}</span></div>
@@ -1309,7 +1679,7 @@ useEffect(() => {
                         type="checkbox"
                         checked={confirm}
                         onChange={(e) => setConfirm(e.target.checked)}
-                        disabled={loading}
+                        disabled={loading || (!usarModoNC && !safeText(configSeleccionada?.cuit))}
                         className="mfb-check__input"
                       />
 

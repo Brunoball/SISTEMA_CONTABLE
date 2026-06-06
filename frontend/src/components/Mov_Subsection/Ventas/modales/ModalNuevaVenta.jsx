@@ -380,6 +380,50 @@ function normalizeConfigFacturacionPdf(cfg) {
   };
 }
 
+function configFacturacionKey(cfg) {
+  const c = cfg && typeof cfg === "object" ? cfg : {};
+  const id = Number(c.id_config_facturacion || c.idConfigFacturacion || 0) || 0;
+  const cuit = String(c.cuit || c.cuit_emisor || "").replace(/\D/g, "");
+  if (id > 0) return `id:${id}`;
+  if (cuit) return `cuit:${cuit}`;
+  return JSON.stringify(c);
+}
+
+function extractConfigsFacturacionResponse(data) {
+  const candidates = [
+    data?.configs,
+    data?.data?.configs,
+    data?.cuentas_fiscales,
+    data?.data?.cuentas_fiscales,
+    data?.cuentas,
+    data?.data?.cuentas,
+    data?.configuraciones,
+    data?.data?.configuraciones,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+  }
+
+  return [];
+}
+
+function mergeConfigsFacturacionList(...lists) {
+  const out = [];
+  const seen = new Set();
+
+  lists.flat().forEach((cfg) => {
+    if (!cfg || typeof cfg !== "object") return;
+    if (Number(cfg.activo ?? 1) === 0) return;
+    const key = configFacturacionKey(cfg);
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(cfg);
+  });
+
+  return out;
+}
+
 function buildClienteFiscalPdf(fiscalSource, clienteSource, nombreFallback = "Cliente") {
   const fiscal = normalizeClienteFiscalDb(fiscalSource || {});
   const cliente = clienteSource && typeof clienteSource === "object" ? clienteSource : {};
@@ -1321,6 +1365,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   const [fiscalArcaData, setFiscalArcaData] = useState(null);
   const [fiscalPanelOpen, setFiscalPanelOpen] = useState(false);
   const [configFacturacion, setConfigFacturacion] = useState(null);
+  const [configsFacturacion, setConfigsFacturacion] = useState([]);
   const [openResumenFactura, setOpenResumenFactura] = useState(false);
   const [resumenFacturaData, setResumenFacturaData] = useState(null);
 
@@ -1894,11 +1939,25 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
 
   const fetchConfigFacturacion = useCallback(async () => {
     const data = await apiGetJson(API_CONFIG_FACTURACION);
-    const cfg = data?.config || data?.data || data || null;
+    const cfgDefault = data?.config || data?.data?.config || data?.data || data || null;
+    const cuentas = mergeConfigsFacturacionList(
+      extractConfigsFacturacionResponse(data),
+      cfgDefault ? [cfgDefault] : [],
+      configFacturacion ? [configFacturacion] : []
+    );
+
+    const cfg = cfgDefault || cuentas[0] || null;
     if (!cfg) throw new Error("No se pudo obtener config de facturación.");
-    setConfigFacturacion(cfg);
-    return cfg;
-  }, [API_CONFIG_FACTURACION]);
+
+    const cfgConCuentas = {
+      ...cfg,
+      _configs_facturacion: cuentas.length ? cuentas : [cfg],
+    };
+
+    setConfigFacturacion(cfgConCuentas);
+    setConfigsFacturacion(cuentas.length ? cuentas : [cfg]);
+    return cfgConCuentas;
+  }, [API_CONFIG_FACTURACION, configFacturacion]);
 
   const buscarFiscalEnArcaPorCuit = useCallback(
     async (cuitRaw) => {
@@ -2823,7 +2882,14 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
           ? normalizeClienteFiscalDb(clienteFiscalOverride)
           : await resolveFiscalForFacturacion();
         const cfg = configFacturacion || (await fetchConfigFacturacion());
-        setResumenFacturaData(buildResumenFacturaPayload(cf, cfg, clienteOverride));
+        const cuentasDisponibles = Array.isArray(cfg?._configs_facturacion) && cfg._configs_facturacion.length
+          ? cfg._configs_facturacion
+          : (configsFacturacion.length ? configsFacturacion : [cfg]);
+        setResumenFacturaData({
+          ...buildResumenFacturaPayload(cf, cfg, clienteOverride),
+          configs_facturacion: cuentasDisponibles,
+        });
+        setConfigsFacturacion(cuentasDisponibles);
         setOpenResumenFactura(true);
       } catch (e) {
         showToast("error", e?.message || "No se pudo preparar la factura.", 4500);
@@ -2831,7 +2897,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         setSaving(false);
       }
     },
-    [validate, showToast, resolveFiscalForFacturacion, configFacturacion, fetchConfigFacturacion, buildResumenFacturaPayload]
+    [validate, showToast, resolveFiscalForFacturacion, configFacturacion, configsFacturacion, fetchConfigFacturacion, buildResumenFacturaPayload]
   );
 
   const finalizarFacturacionYGuardarVenta = useCallback(
@@ -3524,6 +3590,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
           ptoVta={String(resumenFacturaData?.pto_vta || 2)}
           onFacturada={async (fact) => await finalizarFacturacionYGuardarVenta(fact)}
           onDone={async (fact) => await finalizarFacturacionYGuardarVenta(fact)}
+          configsFacturacionInicial={resumenFacturaData?.configs_facturacion || configsFacturacion}
           forceTestAmount={false}
           testAmount={null}
           skipMovimientoAutocreacion={true}

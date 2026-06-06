@@ -146,7 +146,7 @@ function getChequeIdsArray(v) {
 function getDetalleId(d) {
   const c =
     d?.id ?? d?.id_detalle ?? d?.idDetalle ?? d?.detalle_id ??
-    d?.id_categoria_egreso ?? d?.idCategoriaEgreso ?? d?.id_stock_producto ?? null;
+    d?.id_categoria_egreso ?? d?.idCategoriaEgreso ?? null;
   const n = Number(c);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
@@ -157,15 +157,6 @@ function getMedioPagoId(c) {
 }
 function optionLabel(x) {
   return String(x?.nombre ?? x?.categoria ?? x?.descripcion ?? x?.detalle ?? "").trim();
-}
-function getStockDisponible(d) {
-  const c = d?.stock ?? d?.stock_disponible ?? d?.stockDisponible ?? d?.cantidad_stock ?? d?.cantidad ?? null;
-  if (c === null || c === undefined || c === "") return null;
-  const n = Number(c);
-  return Number.isFinite(n) ? n : null;
-}
-function isSinStock(s) {
-  return s !== null && s !== undefined && Number(s) <= 0;
 }
 function calcItemTotals(cantidad, precio, ivaPct) {
   const c = Math.max(0, safeNumber(cantidad));
@@ -181,7 +172,28 @@ function calcItemTotals(cantidad, precio, ivaPct) {
   };
 }
 function normalizeDetalles(lists) {
-  const raw = Array.isArray(lists?.detalles) ? lists.detalles : [];
+  const src = lists && typeof lists === "object" ? lists : {};
+  const l = src?.listas && typeof src.listas === "object" ? src.listas : src;
+
+  // `detalles` global es stock (`stock_productos`). Otros egresos debe usar
+  // solamente la tabla `detalles` expuesta por claves específicas.
+  let raw = [];
+  for (const key of [
+    "detalles_egresos",
+    "detallesEgresos",
+    "detalles_egreso",
+    "detallesEgreso",
+    "detalles_ingresos",
+    "detallesIngresos",
+    "detalles_ingreso",
+    "detallesIngreso",
+  ]) {
+    if (Array.isArray(l?.[key])) {
+      raw = l[key];
+      break;
+    }
+  }
+
   return raw.map((x) => ({
     id: Number(x?.id ?? x?.id_detalle ?? 0),
     nombre: String(x?.nombre ?? x?.descripcion ?? x?.detalle ?? "").trim(),
@@ -1190,36 +1202,22 @@ export default function ModalEditarEgreso({
     (item, itemUid) => {
       if (item?.__isNewOption) return;
       const precio = safeNumber(item?.precio || 0);
-      const stockDisponible = getStockDisponible(item);
-      const sinStock = isSinStock(stockDisponible);
       updateItem(itemUid, {
         id_detalle: String(getDetalleId(item) ?? ""),
         detalle: upperSafeText(optionLabel(item)),
         precio,
-        stock_disponible: stockDisponible,
-        sinStock,
-        cantidad: sinStock ? "" : 1,
+        stock_disponible: null,
+        sinStock: false,
+        cantidad: 1,
       });
     },
     [updateItem]
   );
 
   const handleCantidadChange = useCallback(
-    (itemUid, newCantidad, itemRef) => {
-      if (itemRef?.sinStock || isSinStock(itemRef?.stock_disponible)) {
-        updateItem(itemUid, { cantidad: "" });
-        return;
-      }
+    (itemUid, newCantidad) => {
       let val = newCantidad === "" ? "" : Number(newCantidad);
       if (typeof val === "number" && val < 0) val = 0;
-      if (
-        itemRef?.stock_disponible !== null &&
-        itemRef?.stock_disponible !== undefined &&
-        typeof val === "number" &&
-        val > Number(itemRef.stock_disponible)
-      ) {
-        val = Number(itemRef.stock_disponible);
-      }
       updateItem(itemUid, { cantidad: val });
     },
     [updateItem]
@@ -1672,25 +1670,13 @@ export default function ModalEditarEgreso({
                               className="nv-cell-input nv-cell-input--center"
                               type="text"
                               inputMode="decimal"
-                              value={it.sinStock || isSinStock(it.stock_disponible) ? "" : it.cantidad}
-                              onChange={(e) => handleCantidadChange(it.uid, e.target.value, it)}
-                              disabled={saving || it.sinStock || isSinStock(it.stock_disponible)}
-                              placeholder={it.sinStock || isSinStock(it.stock_disponible) ? "0" : ""}
-                              title={it.sinStock || isSinStock(it.stock_disponible) ? "No podés ingresar cantidad porque el stock es 0" : ""}
-                              style={{
-                                width: "100%",
-                                background: it.sinStock || isSinStock(it.stock_disponible) ? "#f3f4f6" : undefined,
-                                color: it.sinStock || isSinStock(it.stock_disponible) ? "#b91c1c" : undefined,
-                                borderColor: it.sinStock || isSinStock(it.stock_disponible) ? "#fca5a5" : undefined,
-                                cursor: it.sinStock || isSinStock(it.stock_disponible) ? "not-allowed" : undefined,
-                                opacity: it.sinStock || isSinStock(it.stock_disponible) ? 0.9 : 1,
-                              }}
+                              value={it.cantidad}
+                              onChange={(e) => handleCantidadChange(it.uid, e.target.value)}
+                              disabled={saving}
+                              placeholder=""
+                              title=""
+                              style={{ width: "100%" }}
                             />
-                            {it.stock_disponible !== null && it.stock_disponible !== undefined && (
-                              <div style={{ fontSize: "10px", fontWeight: isSinStock(it.stock_disponible) ? 700 : 500, color: isSinStock(it.stock_disponible) ? "#b91c1c" : "#666" }}>
-                                {isSinStock(it.stock_disponible) ? "Sin stock" : `Stock: ${it.stock_disponible}`}
-                              </div>
-                            )}
                           </div>
 
                           <div className="mi-cr-cell mi-cr-cell--center">

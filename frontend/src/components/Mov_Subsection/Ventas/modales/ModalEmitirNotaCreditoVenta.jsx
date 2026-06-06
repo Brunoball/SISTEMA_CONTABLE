@@ -229,9 +229,23 @@ useEffect(() => {
       importe: Number(contexto?.total || 0),
       observaciones: motivo,
       concepto: 1,
+      config_facturacion: contexto?.config_facturacion || {},
+      id_config_facturacion:
+        contexto?.config_facturacion?.id_config_facturacion ||
+        contexto?.config_facturacion?.idConfigFacturacion ||
+        null,
+      idConfigFacturacion:
+        contexto?.config_facturacion?.idConfigFacturacion ||
+        contexto?.config_facturacion?.id_config_facturacion ||
+        null,
+      emisor: contexto?.config_facturacion || null,
       cbtes_asoc: Array.isArray(contexto?.cbtes_asoc) ? contexto.cbtes_asoc : [],
       factura_original: contexto?.factura_original || null,
-      emisor_nombre: safeStr(contexto?.config_facturacion?.razon_social),
+      emisor_nombre: safeStr(
+        contexto?.config_facturacion?.razon_social ||
+        contexto?.config_facturacion?.nombre_fantasia ||
+        contexto?.config_facturacion?.emisor_nombre
+      ),
       emisor_domicilio: safeStr(contexto?.config_facturacion?.domicilio_comercial),
       cuit_emisor: safeStr(contexto?.config_facturacion?.cuit),
       cond_iva_emisor: safeStr(contexto?.config_facturacion?.condicion_iva),
@@ -242,6 +256,11 @@ useEffect(() => {
       logo_url: safeStr(contexto?.config_facturacion?.logo_url),
     };
   }, [contexto, motivo]);
+
+  const configsFacturacionNCIniciales = useMemo(
+    () => (contexto?.config_facturacion ? [contexto.config_facturacion] : []),
+    [contexto]
+  );
 
   const handleEmitida = useCallback(
     async (factEmitida) => {
@@ -615,6 +634,7 @@ useEffect(() => {
           testAmount={null}
           skipMovimientoAutocreacion={true}
           pdfMode="nota_credito"
+          configsFacturacionInicial={configsFacturacionNCIniciales}
         />
       )}
     </>,

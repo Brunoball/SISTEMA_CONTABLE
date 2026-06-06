@@ -89,6 +89,85 @@ function renderValue(v) {
   return s || "—";
 }
 
+function configFacturacionId(cfg) {
+  return Number(cfg?.id_config_facturacion || cfg?.idConfigFacturacion || 0) || 0;
+}
+
+function normalizeConfigFacturacionRow(cfg) {
+  const c = cfg && typeof cfg === "object" ? cfg : {};
+  const id = configFacturacionId(c);
+  const cuit = onlyDigits(c?.cuit || c?.cuit_emisor || "");
+  const pv = onlyDigits(c?.punto_venta || c?.pto_vta || "") || "2";
+  const cbte = onlyDigits(c?.codigo_comprobante || c?.cbte_tipo || "") || "11";
+  const razon = safeStr(c?.razon_social || c?.nombre_fantasia || c?.emisor_nombre || c?.nombre || "BALTO");
+
+  return {
+    ...c,
+    idConfigFacturacion: id,
+    id_config_facturacion: id,
+    razon_social: razon,
+    nombre_fantasia: safeStr(c?.nombre_fantasia) || razon,
+    cuit,
+    cuit_emisor: cuit,
+    punto_venta: String(pv).padStart(5, "0"),
+    pto_vta: Number(pv) || 2,
+    codigo_comprobante: String(cbte).padStart(3, "0"),
+    cbte_tipo: Number(cbte) || 11,
+    domicilio_comercial: safeStr(c?.domicilio_comercial || c?.domicilio || c?.domicilio_fiscal),
+    condicion_iva: safeStr(c?.condicion_iva || c?.cond_iva),
+    cond_iva: safeStr(c?.condicion_iva || c?.cond_iva),
+    ingresos_brutos: safeStr(c?.ingresos_brutos),
+    fecha_inicio_actividades: safeStr(c?.fecha_inicio_actividades || c?.inicio_actividades),
+    activo: Number(c?.activo ?? 1) === 0 ? 0 : 1,
+  };
+}
+
+function configFacturacionLabel(cfg) {
+  const c = normalizeConfigFacturacionRow(cfg || {});
+  const razon = safeStr(c.razon_social || c.nombre_fantasia) || "Cuenta fiscal";
+  const cuit = c.cuit ? `CUIT ${c.cuit}` : "sin CUIT";
+  const pv = onlyDigits(c.punto_venta || c.pto_vta || "") || "—";
+  return `${razon} — ${cuit} — PV ${pv}`;
+}
+
+function extractConfigsFacturacionFromResponse(json) {
+  const candidates = [
+    json?.configs,
+    json?.data?.configs,
+    json?.cuentas_fiscales,
+    json?.data?.cuentas_fiscales,
+    json?.cuentas,
+    json?.data?.cuentas,
+    json?.configuraciones,
+    json?.data?.configuraciones,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+  }
+  return [];
+}
+
+function mergeConfigsFacturacion(...lists) {
+  const out = [];
+  const seen = new Set();
+
+  lists.flat().forEach((cfg) => {
+    const normalized = normalizeConfigFacturacionRow(cfg || {});
+    if (normalized.activo === 0) return;
+
+    const id = configFacturacionId(normalized);
+    const cuit = onlyDigits(normalized?.cuit || normalized?.cuit_emisor || "");
+    const key = id > 0 ? `id:${id}` : (cuit ? `cuit:${cuit}` : JSON.stringify(normalized));
+
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(normalized);
+  });
+
+  return out;
+}
+
 function todayISO() {
   const d = new Date();
   const y = d.getFullYear();
@@ -140,6 +219,11 @@ export default function ModalFacturaBalto({
 
   const [clienteFact, setClienteFact] = useState(null);
 
+  const [configsFacturacion, setConfigsFacturacion] = useState([]);
+  const [selectedConfigId, setSelectedConfigId] = useState("");
+  const [configLoading, setConfigLoading] = useState(false);
+  const [configError, setConfigError] = useState("");
+
   const [formFactura, setFormFactura] = useState({
     fecha_cbte_iso: todayISO(),
     vto_pago_iso: plusDaysISO(10),
@@ -152,6 +236,25 @@ export default function ModalFacturaBalto({
 
   const firstRef = useRef(null);
   const apiRootResolved = useMemo(() => normalizeApiBase(apiBase), [apiBase]);
+
+  const dataConfigInicial = useMemo(
+    () => normalizeConfigFacturacionRow(data?.config_facturacion || data?.emisor || {}),
+    [data]
+  );
+
+  const configSeleccionada = useMemo(() => {
+    const byId = configsFacturacion.find((cfg) => String(configFacturacionId(cfg)) === String(selectedConfigId));
+    if (byId) return normalizeConfigFacturacionRow(byId);
+    if (configFacturacionId(dataConfigInicial)) return dataConfigInicial;
+    if (configsFacturacion[0]) return normalizeConfigFacturacionRow(configsFacturacion[0]);
+    return normalizeConfigFacturacionRow({});
+  }, [configsFacturacion, selectedConfigId, dataConfigInicial]);
+
+  const initialFacturaConCuenta = useMemo(() => ({
+    ...formFactura,
+    cbte_tipo: Number(configSeleccionada?.cbte_tipo || formFactura.cbte_tipo || 11),
+    pto_vta: Number(configSeleccionada?.pto_vta || formFactura.pto_vta || 2),
+  }), [formFactura, configSeleccionada]);
 
   const nombreCliente = useMemo(
     () => data?.labelCliente || data?.cliente || "",
@@ -172,6 +275,7 @@ export default function ModalFacturaBalto({
     setResult(null);
 
     setClienteFact(cf || null);
+    setConfigError("");
     setDocTipo(Number(cf?.doc_tipo || 80));
     setDocNro(onlyDigits(cf?.doc_nro || ""));
 
@@ -235,6 +339,64 @@ export default function ModalFacturaBalto({
 
     return j;
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const idInicial = configFacturacionId(data?.config_facturacion || data?.emisor || {});
+    if (idInicial > 0) setSelectedConfigId(String(idInicial));
+
+    let cancelled = false;
+
+    async function cargarCuentasFiscales() {
+      setConfigLoading(true);
+      setConfigError("");
+
+      try {
+        const url = buildApiUrl(apiRootResolved, { action: "config_facturacion_get" });
+        const json = await fetchJSON(url, { method: "GET" });
+        if (cancelled) return;
+
+        const cfgDefault = normalizeConfigFacturacionRow(json?.config || json?.data?.config || {});
+        const finalList = mergeConfigsFacturacion(
+          extractConfigsFacturacionFromResponse(json),
+          cfgDefault,
+          dataConfigInicial
+        );
+
+        setConfigsFacturacion(finalList);
+
+        const currentId = idInicial > 0
+          ? idInicial
+          : (configFacturacionId(cfgDefault) || configFacturacionId(finalList[0]));
+        if (currentId > 0) setSelectedConfigId(String(currentId));
+      } catch (e) {
+        if (cancelled) return;
+        setConfigError(humanizeFetchError(e) || "No se pudieron cargar las cuentas fiscales.");
+        const fallback = configFacturacionId(dataConfigInicial) ? [dataConfigInicial] : [];
+        setConfigsFacturacion(fallback);
+      } finally {
+        if (!cancelled) setConfigLoading(false);
+      }
+    }
+
+    cargarCuentasFiscales();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, apiRootResolved, fetchJSON, data, dataConfigInicial]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (!configFacturacionId(configSeleccionada)) return;
+
+    setFormFactura((prev) => ({
+      ...prev,
+      cbte_tipo: Number(configSeleccionada?.cbte_tipo || prev.cbte_tipo || 11),
+      pto_vta: Number(configSeleccionada?.pto_vta || prev.pto_vta || 2),
+    }));
+  }, [open, selectedConfigId, configSeleccionada]);
 
   const validar = useCallback(() => {
     const doc = onlyDigits(docNro);
@@ -303,6 +465,8 @@ export default function ModalFacturaBalto({
         action: "padron_cuit",
         op: "padron_cuit",
         cuit: v.doc,
+        // Padrón A5 consulta siempre con la cuenta principal del tenant.
+        // La cuenta fiscal seleccionada se usa recién para emitir la factura.
       });
 
       const j = await fetchJSON(url, { method: "GET" });
@@ -328,6 +492,11 @@ export default function ModalFacturaBalto({
     const v = validar();
     if (!v.ok) {
       setError(v.msg);
+      return;
+    }
+
+    if (!safeStr(configSeleccionada?.cuit)) {
+      setError("Seleccioná una cuenta fiscal emisora antes de continuar.");
       return;
     }
 
@@ -372,8 +541,8 @@ export default function ModalFacturaBalto({
     manualRazon,
     manualIva,
     manualDomicilio,
+    configSeleccionada,
   ]);
-
   const handleGuardarDatosFactura = useCallback((payload) => {
     setFormFactura({
       fecha_cbte_iso: payload?.fecha_cbte_iso || todayISO(),
@@ -402,7 +571,7 @@ export default function ModalFacturaBalto({
         clienteFact={clienteFact}
         docTipo={docTipo}
         docNro={docNro}
-        initialData={formFactura}
+        initialData={initialFacturaConCuenta}
         nombreCliente={nombreCliente}
         nombreSistema={nombreSistema}
         onNext={handleGuardarDatosFactura}
@@ -427,8 +596,13 @@ export default function ModalFacturaBalto({
           labelSistema: nombreSistema,
           fecha_cbte_iso: formFactura.fecha_cbte_iso,
           vto_pago_iso: formFactura.vto_pago_iso,
-          cbte_tipo: formFactura.cbte_tipo,
-          pto_vta: formFactura.pto_vta,
+          cbte_tipo: Number(configSeleccionada?.cbte_tipo || formFactura.cbte_tipo || 11),
+          pto_vta: Number(configSeleccionada?.pto_vta || formFactura.pto_vta || 2),
+          id_config_facturacion: configFacturacionId(configSeleccionada) || null,
+          idConfigFacturacion: configFacturacionId(configSeleccionada) || null,
+          cuit_emisor: configSeleccionada?.cuit || null,
+          config_facturacion: configSeleccionada || null,
+          emisor: configSeleccionada || null,
           items_facturacion: formFactura.items_facturacion,
           total_ars: formFactura.total_ars,
           monto: formFactura.total_ars,
@@ -437,8 +611,9 @@ export default function ModalFacturaBalto({
         }}
         docTipo={docTipo}
         docNro={docNro}
-        cbteTipo={formFactura.cbte_tipo}
-        ptoVta={String(formFactura.pto_vta)}
+        cbteTipo={Number(configSeleccionada?.cbte_tipo || formFactura.cbte_tipo || 11)}
+        ptoVta={String(configSeleccionada?.pto_vta || formFactura.pto_vta || 2)}
+        configsFacturacionInicial={configsFacturacion}
         onFacturada={onFacturada}
         onDone={onDone}
         forceTestAmount={false}
@@ -488,6 +663,50 @@ export default function ModalFacturaBalto({
           )}
 
           <div className="mi-grid">
+            <article className="mi-card mi-card--full">
+              <h3 className="mi-card__title">Cuenta fiscal emisora</h3>
+
+              <div className="fl-grid">
+                <div className="fl-field fl-col-full">
+                  <select
+                    className="fl-input fl-select"
+                    value={selectedConfigId}
+                    onChange={(e) => {
+                      setSelectedConfigId(e.target.value);
+                      setError("");
+                      setResult(null);
+                    }}
+                    disabled={loading}
+                  >
+                    {!configsFacturacion.length && (
+                      <option value="">Sin cuentas fiscales activas</option>
+                    )}
+                    {configsFacturacion.map((cfg) => {
+                      const id = configFacturacionId(cfg);
+                      return (
+                        <option key={id || cfg.cuit || configFacturacionLabel(cfg)} value={String(id)}>
+                          {configFacturacionLabel(cfg)}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <label className="fl-label">Facturar desde *</label>
+                </div>
+              </div>
+
+              {configLoading && (
+                <div className="arca-mini" style={{ marginTop: 10 }}>
+                  Cargando cuentas fiscales...
+                </div>
+              )}
+
+              {configError && (
+                <div className="arca-alert arca-alert--error" style={{ marginTop: 10 }} role="alert">
+                  {configError}
+                </div>
+              )}
+            </article>
+
             <article className="mi-card mi-card--full">
               <h3 className="mi-card__title">Cliente</h3>
 
@@ -678,7 +897,7 @@ export default function ModalFacturaBalto({
               type="button"
               className="mit-btn mit-btn--solid"
               onClick={usarDatos}
-              disabled={loading || !onlyDigits(docNro)}
+              disabled={loading || !onlyDigits(docNro) || !safeStr(configSeleccionada?.cuit)}
             >
               Usar estos datos <FaCheck style={{ marginLeft: 8 }} />
             </button>

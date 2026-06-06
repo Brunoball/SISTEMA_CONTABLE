@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { FaCheck } from "react-icons/fa";
-import "./ModalFacturaBalto.css";
+import "./ModalFacturaBaltoResumen.css";
 import "../../Global/Global_css/Global_oscuro.css";
 import { DEMO_BLOCK_MESSAGE, isBaltoDemoMode } from "../../../utils/demoMode";
 
@@ -1525,7 +1525,7 @@ useEffect(() => {
       }
     >
       <div
-        className="mi-modal__container mfb-modal-container"
+        className="mi-modal__container mfr-modal"
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
@@ -1550,14 +1550,14 @@ useEffect(() => {
           </button>
         </div>
 
-        <div className="mit-modal__body">
-          <div className="mfb-tabs">
+        <div className="mit-modal__body mfr-body">
+          <div className="mfr-tabs">
             <button
               type="button"
-              className={`mfb-tab ${tabActiva === "resumen" ? "is-active" : ""}`}
+              className={`mfr-tab ${tabActiva === "resumen" ? "is-active" : ""}`}
               onClick={() => setTabActiva("resumen")}
             >
-              <span className="mfb-tab__text">
+              <span className="mfr-tab__text">
                 {usarModoNC
                   ? "Resumen de nota de crédito"
                   : "Resumen de facturación"}
@@ -1566,33 +1566,31 @@ useEffect(() => {
 
             <button
               type="button"
-              className={`mfb-tab ${tabActiva === "preview" ? "is-active" : ""}`}
+              className={`mfr-tab ${tabActiva === "preview" ? "is-active" : ""}`}
               onClick={() => setTabActiva("preview")}
             >
-              <span className="mfb-tab__text">
+              <span className="mfr-tab__text">
                 Vista previa PDF
               </span>
             </button>
           </div>
 
           {error && (
-            <div className="mov-mi-error mfb-error-top" role="alert">
+            <div className="mov-mi-error mfr-error-top" role="alert">
               {error}
             </div>
           )}
 
           {tabActiva === "resumen" && (
-            <div className="mi-tabpanel padding-tabpanel">
-              <div className="mi-card" >
-                <div className="arca-alert arca-alert--info">
-                  <div className="arca-alert__title">
-                    <strong>
-                      {usarModoNC ? "Resumen de nota de crédito" : "Resumen de facturación"}
-                    </strong>
+            <div className="mi-tabpanel mfr-tabpanel">
+              <div className="mi-card mfr-card">
+                <div className="mfr-summary">
+                  <div className="mfr-summary__head">
+                    <h3 className="mfr-control-title">Control final</h3>
                   </div>
 
                   {!usarModoNC && (
-                    <div className="fl-grid" style={{ marginTop: 12, marginBottom: 12 }}>
+                    <div className="fl-grid mfr-config-grid">
                       <div className="fl-field fl-col-full">
                         <select
                           className="fl-input fl-select"
@@ -1620,74 +1618,90 @@ useEffect(() => {
                       </div>
 
                       {configLoading && (
-                        <div className="arca-mini fl-col-full">Cargando cuentas fiscales...</div>
+                        <div className="mfr-mini fl-col-full">Cargando cuentas fiscales...</div>
                       )}
 
                       {configError && (
-                        <div className="arca-alert arca-alert--error fl-col-full" role="alert">
+                        <div className="mfr-alert mfr-alert--error fl-col-full" role="alert">
                           {configError}
                         </div>
                       )}
                     </div>
                   )}
 
-                  <div className="arca-resumen-grid">
-                    <div className="arca-col">
-                      <div className="arca-row"><b>Cliente:</b><span>{resumen.cliente}</span></div>
-                      <div className="arca-row"><b>Sistema:</b><span>{resumen.sistema}</span></div>
-                      <div className="arca-row"><b>Fecha:</b><span>{ymdToHuman(resumen.fechaISO)}</span></div>
-                      <div className="arca-row"><b>Vencimiento:</b><span>{ymdToHuman(resumen.vtoISO)}</span></div>
-                      <div className="arca-row"><b>Receptor:</b><span>{resumen.receptorTxt}</span></div>
-                      <div className="arca-row"><b>Punto de venta:</b><span>{resumen.pvTxt}</span></div>
-                      <div className="arca-row"><b>IVA cliente:</b><span>{resumen.iva}</span></div>
-                      <div className="arca-row"><b>Domicilio cliente:</b><span>{resumen.domicilio}</span></div>
-                    </div>
+                  <div className="mfr-summary-grid">
+                    <section className="mfr-info-panel">
+                      <h3 className="mfr-info-panel__title">Datos del cliente</h3>
+                      <div className="mfr-info-list">
+                        <div className="mfr-info-row"><b>Cliente</b><span>{resumen.cliente}</span></div>
+                        <div className="mfr-info-row"><b>Sistema</b><span>{resumen.sistema}</span></div>
+                        <div className="mfr-info-row"><b>Fecha</b><span>{ymdToHuman(resumen.fechaISO)}</span></div>
+                        <div className="mfr-info-row"><b>Vencimiento</b><span>{ymdToHuman(resumen.vtoISO)}</span></div>
+                        <div className="mfr-info-row"><b>Receptor</b><span>{resumen.receptorTxt}</span></div>
+                        <div className="mfr-info-row"><b>Punto de venta</b><span>{resumen.pvTxt}</span></div>
+                        <div className="mfr-info-row"><b>IVA cliente</b><span>{resumen.iva}</span></div>
+                        <div className="mfr-info-row"><b>Domicilio cliente</b><span>{resumen.domicilio}</span></div>
+                      </div>
+                    </section>
 
-                    <div className="arca-col">
-                      <div className="arca-row"><b>Emisor:</b><span>{emisorNombre}</span></div>
-                      <div className="arca-row"><b>CUIT emisor:</b><span>{emisorCuit}</span></div>
-                      <div className="arca-row"><b>IVA emisor:</b><span>{emisorCondIva}</span></div>
-                      <div className="arca-row"><b>Domicilio comercial:</b><span>{emisorDomicilio}</span></div>
-                      <div className="arca-row"><b>Ing. Brutos:</b><span>{emisorIibb}</span></div>
-                      <div className="arca-row"><b>Inicio actividades:</b><span>{emisorFechaInicio}</span></div>
-                      <div className="arca-row"><b>Monto total:</b><span>{resumen.montoTxt}</span></div>
-                      <div className="arca-row"><b>Comprobante:</b><span>{resumen.comprobante}</span></div>
-                    </div>
+                    <section className="mfr-info-panel">
+                      <h3 className="mfr-info-panel__title">Datos del emisor</h3>
+                      <div className="mfr-info-list">
+                        <div className="mfr-info-row"><b>Emisor</b><span>{emisorNombre}</span></div>
+                        <div className="mfr-info-row"><b>CUIT emisor</b><span>{emisorCuit}</span></div>
+                        <div className="mfr-info-row"><b>IVA emisor</b><span>{emisorCondIva}</span></div>
+                        <div className="mfr-info-row"><b>Domicilio comercial</b><span>{emisorDomicilio}</span></div>
+                        <div className="mfr-info-row"><b>Ing. Brutos</b><span>{emisorIibb}</span></div>
+                        <div className="mfr-info-row"><b>Inicio actividades</b><span>{emisorFechaInicio}</span></div>
+                        <div className="mfr-info-row"><b>Comprobante</b><span>{resumen.comprobante}</span></div>
+                      </div>
+                    </section>
                   </div>
 
-                  <div className="mfb-mt14">
-                    <strong>Detalle</strong>
-                    <div className="mfb-mt8">
+                  <div className="mfr-detail">
+                    <div className="mfr-detail__head">
+                      <strong>Detalle</strong>
+                      <span>{(items || []).length} ítem{(items || []).length === 1 ? "" : "s"}</span>
+                    </div>
+
+                    <div className="mfr-detail__list">
                       {(items || []).map((it, idx) => (
                         <div
                           key={`${it?.id || idx}_${idx}`}
-                          className="arca-mini mfb-mb6"
+                          className="mfr-item"
                         >
-                          {idx + 1}. {it.descripcion} — Cant: {it.cantidad} — P.Unit:{" "}
-                          {moneyARS(it.precio_unitario || it.precio || 0)} — IVA:{" "}
-                          {moneyARS(it.iva_monto || 0)} — Total:{" "}
-                          {moneyARS(it.total || it.ars || it.subtotal || 0)}
+                          <div className="mfr-item__main">
+                            <span className="mfr-item__index">{idx + 1}</span>
+                            <span className="mfr-item__desc">{it.descripcion}</span>
+                          </div>
+
+                          <div className="mfr-item__meta">
+                            <span><b>Cant.</b>{it.cantidad}</span>
+                            <span><b>P. Unit.</b>{moneyARS(it.precio_unitario || it.precio || 0)}</span>
+                            <span><b>IVA</b>{moneyARS(it.iva_monto || 0)}</span>
+                            <span className="mfr-item__total"><b>Total</b>{moneyARS(it.total || it.ars || it.subtotal || 0)}</span>
+                          </div>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  <div className="arca-confirm mfb-mt14">
-                    <label className="arca-check mfb-check">
+                  <div className="mfr-confirm">
+                    <label className="mfr-check">
                       <input
                         ref={firstRef}
                         type="checkbox"
                         checked={confirm}
                         onChange={(e) => setConfirm(e.target.checked)}
                         disabled={loading || (!usarModoNC && !safeText(configSeleccionada?.cuit))}
-                        className="mfb-check__input"
+                        className="mfr-check__input"
                       />
 
-                      <span className="mfb-check__box">
-                        <FaCheck className="mfb-check__icon" />
+                      <span className="mfr-check__box">
+                        <FaCheck className="mfr-check__icon" />
                       </span>
 
-                      <span className="mfb-check__text">
+                      <span className="mfr-check__text">
                         Confirmo que los <b>datos del cliente</b>, del <b>emisor</b>, el <b>detalle</b> y el <b>monto</b> son correctos.
                       </span>
                     </label>
@@ -1698,20 +1712,20 @@ useEffect(() => {
           )}
 
           {tabActiva === "preview" && (
-            <div className="mi-tanel">
-              <div className="mi-card" style={{ padding: "0" }}>
+            <div className="mfr-preview-panel">
+              <div className="mi-card mfr-preview-card">
                 {loadingPreview ? (
-                  <div className="arca-alert arca-alert--info">
+                  <div className="mfr-alert mfr-alert--info">
                     Generando vista previa...
                   </div>
                 ) : previewUrl ? (
                   <iframe
                     title={usarModoNC ? "Vista previa nota de crédito PDF" : "Vista previa factura PDF"}
                     src={previewUrl}
-                    className="mfb-preview"
+                    className="mfr-preview"
                   />
                 ) : (
-                  <div className="arca-alert arca-alert--error">
+                  <div className="mfr-alert mfr-alert--error">
                     No se pudo generar la vista previa del PDF.
                   </div>
                 )}
@@ -1719,10 +1733,10 @@ useEffect(() => {
             </div>
           )}
 
-          <div className="mit-actions">
+          <div className="mit-actions mfr-actions">
             <button
               type="button"
-              className="mit-btn mit-btn--ghost"
+              className="mit-btn mit-btn--ghost mfr-btn"
               onClick={() => !loading && onBack?.()}
               disabled={loading}
             >
@@ -1731,7 +1745,7 @@ useEffect(() => {
 
             <button
               type="button"
-              className="mit-btn mit-btn--solid"
+              className="mit-btn mit-btn--solid mfr-btn"
               onClick={emitir}
               disabled={loading || !confirm}
             >
@@ -1739,7 +1753,7 @@ useEffect(() => {
                 usarModoNC ? "Emitiendo nota de crédito..." : "Emitiendo..."
               ) : (
                 <>
-                  Emitir + facturar <FaCheck className="mfb-icon" />
+                  Emitir + facturar <FaCheck className="mfr-icon" />
                 </>
               )}
             </button>

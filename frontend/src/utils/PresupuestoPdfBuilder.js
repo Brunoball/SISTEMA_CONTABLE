@@ -336,6 +336,67 @@ function getTotales(items, data) {
   };
 }
 
+function getCondicionesPresupuesto(data) {
+  const c = data?.condiciones_presupuesto && typeof data.condiciones_presupuesto === "object"
+    ? data.condiciones_presupuesto
+    : {};
+  const validezDiasRaw = data?.validez_dias ?? data?.validezDias ?? c.validez_dias ?? c.validezDias;
+  const validezDias = validezDiasRaw === null || validezDiasRaw === undefined || validezDiasRaw === ""
+    ? null
+    : safeNumber(validezDiasRaw, 0);
+  const fechaValidez = ymdToHuman(pickText(data?.fecha_validez, data?.fechaValidez, c.fecha_validez, c.fechaValidez));
+  const validezTxt = validezDias && validezDias > 0
+    ? `${Math.round(validezDias)} días corridos${fechaValidez ? ` (hasta ${fechaValidez})` : ""}`
+    : (fechaValidez ? `Hasta ${fechaValidez}` : "No informada");
+
+  return {
+    validez: validezTxt,
+    plazoEntrega: pickText(data?.plazo_entrega, data?.plazoEntrega, c.plazo_entrega, c.plazoEntrega, "A convenir."),
+    formaPago: pickText(data?.forma_pago, data?.formaPago, c.forma_pago, c.formaPago, "A convenir con el cliente."),
+    condiciones: pickText(data?.condiciones_comerciales, data?.condicionesComerciales, c.condiciones_comerciales, c.condicionesComerciales),
+    notas: pickText(data?.notas, c.notas, data?.observaciones),
+    garantia: pickText(data?.garantia, c.garantia),
+    lugarEntrega: pickText(data?.lugar_entrega, data?.lugarEntrega, c.lugar_entrega, c.lugarEntrega),
+  };
+}
+
+function wrapTextBlock(doc, value, maxW, maxLines = 4) {
+  const raw = String(value ?? "")
+    .replace(/[“”]/g, '"')
+    .replace(/[’‘]/g, "'")
+    .replace(/[–—]/g, "-")
+    .replace(/\r\n|\r/g, "\n")
+    .trim();
+  if (!raw) return [];
+
+  const parts = raw.split(/\n+/).map((x) => x.trim()).filter(Boolean);
+  const lines = [];
+  parts.forEach((part) => {
+    if (lines.length >= maxLines) return;
+    const wrapped = wrapByWidth(doc, part, maxW);
+    wrapped.forEach((ln) => {
+      if (lines.length < maxLines) lines.push(ln);
+    });
+  });
+  if (lines.length > maxLines) return lines.slice(0, maxLines);
+  return lines;
+}
+
+function drawLabelValue(doc, label, value, x, y, w, maxLines = 3) {
+  const labelTxt = sanitizePdfText(label);
+  const valueLines = wrapTextBlock(doc, value || "-", w, maxLines);
+  set(doc, "helvetica", "bold", 8.1);
+  text(doc, labelTxt, x, y);
+  set(doc, "helvetica", "normal", 8);
+  const startY = y + 10;
+  valueLines.forEach((ln, idx) => text(doc, ln, x + 10, startY + idx * 9));
+  return startY + Math.max(1, valueLines.length) * 9 + 5;
+}
+
+function presupuestoFooterRequiredHeight() {
+  return 92 + 8 + 158 + 42 + 10;
+}
+
 function drawOuter(doc) {
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
@@ -534,11 +595,16 @@ function drawTotalsAndFooter(doc, items, data, y) {
   const B = 10;
   const innerW = W - B * 2;
   const totals = getTotales(items, data);
+  const condiciones = getCondicionesPresupuesto(data || {});
+
   const totH = 92;
-  const footerH = 58;
+  const gap = 8;
+  const termsH = 158;
+  const footerH = 42;
   const footerTopY = H - B - footerH;
-  const minTotY = footerTopY - totH;
+  const minTotY = footerTopY - termsH - gap - totH;
   const totY = Math.max(y, minTotY);
+  const termsY = totY + totH + gap;
 
   rect(doc, B, totY, innerW, totH, 0.55);
   const sepX = B + innerW * 0.58;
@@ -547,10 +613,10 @@ function drawTotalsAndFooter(doc, items, data, y) {
   const obsX = B + 12;
   const obsW = sepX - obsX - 14;
   set(doc, "helvetica", "bold", 8.5);
-  text(doc, "Observaciones:", obsX, totY + 20);
+  text(doc, "Resumen / observaciones:", obsX, totY + 19);
   set(doc, "helvetica", "normal", 8);
-  const obs = data?.observaciones || "Presupuesto sin validez fiscal. No reemplaza factura ni comprobante fiscal.";
-  wrapByWidth(doc, obs, obsW).slice(0, 4).forEach((ln, i) => text(doc, ln, obsX, totY + 38 + i * 10));
+  const obs = condiciones.notas || data?.observaciones || "Presupuesto sin validez fiscal. No reemplaza factura ni comprobante fiscal.";
+  wrapTextBlock(doc, obs, obsW, 4).forEach((ln, i) => text(doc, ln, obsX, totY + 36 + i * 10));
 
   const labelX = sepX + 24;
   const valueX = B + innerW - 14;
@@ -563,11 +629,37 @@ function drawTotalsAndFooter(doc, items, data, y) {
   text(doc, "Importe Total: $", labelX, totY + 75);
   text(doc, moneyEs(totals.total), valueX, totY + 75, { align: "right" });
 
+  rect(doc, B, termsY, innerW, termsH, 0.55);
+  fillRect(doc, B, termsY, innerW, 22, 0.90);
+  set(doc, "helvetica", "bold", 9);
+  text(doc, "Condiciones comerciales del presupuesto", B + 12, termsY + 15);
+
+  const colGap = 16;
+  const colW = (innerW - 24 - colGap) / 2;
+  const leftX = B + 12;
+  const rightX = leftX + colW + colGap;
+  let leftY = termsY + 38;
+  let rightY = termsY + 38;
+
+  leftY = drawLabelValue(doc, "Validez del presupuesto:", condiciones.validez, leftX, leftY, colW, 2);
+  leftY = drawLabelValue(doc, "Plazo de entrega:", condiciones.plazoEntrega, leftX, leftY, colW, 3);
+  if (condiciones.lugarEntrega) {
+    leftY = drawLabelValue(doc, "Lugar de entrega:", condiciones.lugarEntrega, leftX, leftY, colW, 2);
+  }
+
+  rightY = drawLabelValue(doc, "Forma de pago:", condiciones.formaPago, rightX, rightY, colW, 4);
+  const aclaraciones = [condiciones.condiciones, condiciones.garantia ? `Garantía: ${condiciones.garantia}` : ""]
+    .filter(Boolean)
+    .join(". ");
+  if (aclaraciones) {
+    rightY = drawLabelValue(doc, "Aclaraciones:", aclaraciones, rightX, rightY, colW, 4);
+  }
+
   line(doc, B, footerTopY, W - B, footerTopY, 0.45);
   set(doc, "helvetica", "bold", 8.8);
-  text(doc, "Presupuesto generado desde Balto", B + 12, footerTopY + 30);
+  text(doc, "Presupuesto generado desde Balto", B + 12, footerTopY + 23);
   set(doc, "helvetica", "italic", 7.3);
-  text(doc, "Documento no fiscal. Sin CAE, sin QR fiscal y sin intervención de ARCA.", B + 12, footerTopY + 44);
+  text(doc, "Documento no fiscal. Sin CAE, sin QR fiscal y sin intervención de ARCA.", B + 12, footerTopY + 36);
 }
 
 function addPageNumbering(doc) {
@@ -577,7 +669,7 @@ function addPageNumbering(doc) {
   for (let i = 1; i <= total; i += 1) {
     doc.setPage(i);
     set(doc, "helvetica", "normal", 8);
-    text(doc, `Pág. ${i}/${total}`, W / 2, H - 48, { align: "center" });
+    text(doc, `Pág. ${i}/${total}`, W - 24, H - 18, { align: "right" });
   }
 }
 
@@ -587,7 +679,7 @@ export async function buildPresupuestoPdf({ data } = {}) {
   const items = normalizeItems(data || {});
   const H = doc.internal.pageSize.getHeight();
   const B = 10;
-  const bottomLimit = H - B - 170;
+  const bottomLimit = H - B - presupuestoFooterRequiredHeight();
   let y;
   let cols;
 
@@ -612,7 +704,7 @@ export async function buildPresupuestoPdf({ data } = {}) {
     }
   });
 
-  if (y + 120 > bottomLimit) {
+  if (y + presupuestoFooterRequiredHeight() > H - B) {
     doc.addPage();
     startPage();
   }

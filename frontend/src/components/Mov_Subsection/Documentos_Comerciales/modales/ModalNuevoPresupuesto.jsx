@@ -24,6 +24,22 @@ const IVA_OPTIONS = [
   { label: "27 %", value: 27 },
 ];
 
+const DEFAULT_CONDICIONES_PRESUPUESTO = {
+  validezDias: "7",
+  plazoEntrega: "",
+  formaPago: "A convenir con el cliente. Puede ser efectivo, transferencia bancaria, cheque u otro medio acordado.",
+  condicionesComerciales:
+    "Los precios se mantienen durante la vigencia indicada. No incluye fletes, instalación ni gastos adicionales salvo que estén detallados en el presupuesto.",
+  notas: "",
+  garantia: "",
+  lugarEntrega: "",
+  moneda: "ARS",
+};
+
+function buildDefaultCondicionesPresupuesto() {
+  return { ...DEFAULT_CONDICIONES_PRESUPUESTO };
+}
+
 function todayISO() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -33,6 +49,41 @@ function clampFechaHastaHoy(value) {
   const hoy = todayISO();
   const next = String(value ?? "").slice(0, 10);
   return next && next > hoy ? hoy : next;
+}
+
+function addDaysISO(fechaISO, dias) {
+  const base = String(fechaISO || "").slice(0, 10);
+  const n = Number(dias);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(base) || !Number.isFinite(n) || n <= 0) return "";
+  const [y, m, d] = base.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + Math.floor(n));
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+}
+
+function formatFechaCorta(fechaISO) {
+  const raw = String(fechaISO || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return "";
+  const [y, m, d] = raw.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function normalizeCondicionesPresupuesto(input, fechaBase) {
+  const data = input && typeof input === "object" ? input : {};
+  const rawValidez = String(data.validezDias ?? data.validez_dias ?? "").trim();
+  const validezDias = rawValidez === "" ? null : Math.max(0, Math.min(3650, Number(rawValidez) || 0));
+  const fechaValidez = validezDias && validezDias > 0 ? addDaysISO(fechaBase, validezDias) : "";
+  return {
+    validez_dias: validezDias,
+    fecha_validez: fechaValidez,
+    plazo_entrega: safeStr(data.plazoEntrega ?? data.plazo_entrega),
+    forma_pago: safeStr(data.formaPago ?? data.forma_pago),
+    condiciones_comerciales: safeStr(data.condicionesComerciales ?? data.condiciones_comerciales),
+    notas: safeStr(data.notas),
+    garantia: safeStr(data.garantia),
+    lugar_entrega: safeStr(data.lugarEntrega ?? data.lugar_entrega),
+    moneda: safeStr(data.moneda || "ARS"),
+  };
 }
 
 function safeNumber(v) {
@@ -725,6 +776,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
   const [cliInput, setCliInput] = useState("");
   const [clienteSel, setClienteSel] = useState(null);
   const [observaciones, setObservaciones] = useState("");
+  const [condiciones, setCondiciones] = useState(buildDefaultCondicionesPresupuesto);
   const [rows, setRows] = useState([buildEmptyRow()]);
   const [saving, setSaving] = useState(false);
   const [configFacturacion, setConfigFacturacion] = useState(null);
@@ -763,6 +815,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
     setCliInput("");
     setClienteSel(null);
     setObservaciones("");
+    setCondiciones(buildDefaultCondicionesPresupuesto());
     setRows([buildEmptyRow()]);
     setSaving(false);
     setAddUI({ open: false, cuit: "", fiscalData: null, fiscalError: "", lookupLoading: false, saving: false });
@@ -790,6 +843,10 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
 
   const addRow = useCallback(() => {
     setRows((prev) => [...prev, buildEmptyRow()]);
+  }, []);
+
+  const updateCondicion = useCallback((key, value) => {
+    setCondiciones((prev) => ({ ...prev, [key]: value }));
   }, []);
 
   const resetAddUIState = useCallback(() => {
@@ -1127,11 +1184,17 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
     );
   }, [computedRows]);
 
+  const condicionesPreview = useMemo(() => normalizeCondicionesPresupuesto(condiciones, fecha), [condiciones, fecha]);
+
   const validate = useCallback(() => {
     const idCliente = getClienteId(clienteSel);
     if (!idCliente) return "Seleccioná un cliente del listado.";
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha))) return "Seleccioná una fecha válida.";
     if (String(fecha).slice(0, 10) > todayISO()) return "La fecha no puede ser posterior al día actual.";
+    const validezRaw = String(condiciones.validezDias ?? "").trim();
+    if (validezRaw !== "" && (!/^\d+$/.test(validezRaw) || Number(validezRaw) > 3650)) {
+      return "La validez debe ser un número de días entre 0 y 3650.";
+    }
     const validItems = computedRows.filter((r) => safeStr(r.detalleText) && r.cantidad > 0 && r.precio > 0);
     if (!validItems.length) return "Agregá al menos un producto o servicio con cantidad y precio.";
 
@@ -1144,7 +1207,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
       if (!(r.precio > 0)) problems.push(`Fila ${idx + 1}: el precio debe ser mayor a 0.`);
     });
     return problems[0] || "";
-  }, [clienteSel, fecha, computedRows]);
+  }, [clienteSel, fecha, computedRows, condiciones.validezDias]);
 
   const buildItemsPayload = useCallback(() => {
     return computedRows
@@ -1202,7 +1265,17 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
       subtotal_ars: totals.subtotal,
       iva_ars: totals.iva,
       total_ars: totals.total,
-      observaciones,
+      observaciones: payload?.observaciones || observaciones,
+      condiciones_presupuesto: payload?.condiciones_presupuesto || normalizeCondicionesPresupuesto(condiciones, fecha),
+      validez_dias: payload?.validez_dias,
+      fecha_validez: payload?.fecha_validez,
+      plazo_entrega: payload?.plazo_entrega,
+      forma_pago: payload?.forma_pago,
+      condiciones_comerciales: payload?.condiciones_comerciales,
+      notas: payload?.notas,
+      garantia: payload?.garantia,
+      lugar_entrega: payload?.lugar_entrega,
+      moneda: payload?.moneda,
     };
 
     const { blob, filename } = await savePresupuestoPdf({ data: pdfData, download: false });
@@ -1227,11 +1300,21 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
       fecha_cbte: fecha.replace(/-/g, ""),
       fecha_cbte_iso: fecha,
       monto_ars: totals.total,
+      condiciones_presupuesto: pdfData.condiciones_presupuesto,
+      validez_dias: pdfData.validez_dias,
+      fecha_validez: pdfData.fecha_validez,
+      plazo_entrega: pdfData.plazo_entrega,
+      forma_pago: pdfData.forma_pago,
+      condiciones_comerciales: pdfData.condiciones_comerciales,
+      notas: pdfData.notas,
+      garantia: pdfData.garantia,
+      lugar_entrega: pdfData.lugar_entrega,
+      moneda: pdfData.moneda,
       resumen_facturacion: pdfData,
     }));
 
     return await apiPostForm(`${API}?action=ventas_comprobantes_vincular_movimiento`, fd);
-  }, [API, clienteSel, cliInput, configFacturacion, fecha, observaciones, totals]);
+  }, [API, clienteSel, cliInput, configFacturacion, fecha, observaciones, condiciones, totals]);
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
@@ -1244,6 +1327,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
     const idCliente = getClienteId(clienteSel);
     const items = buildItemsPayload();
     const fechaEnvio = String(fecha || "").slice(0, 10);
+    const condicionesPayload = normalizeCondicionesPresupuesto(condiciones, fechaEnvio);
     const payload = {
       fecha: fechaEnvio,
       id_cliente: idCliente,
@@ -1252,7 +1336,17 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
       iva_total: totals.iva,
       total: totals.total,
       monto_total: totals.total,
-      observaciones,
+      observaciones: condicionesPayload.notas || observaciones,
+      validez_dias: condicionesPayload.validez_dias,
+      fecha_validez: condicionesPayload.fecha_validez,
+      plazo_entrega: condicionesPayload.plazo_entrega,
+      forma_pago: condicionesPayload.forma_pago,
+      condiciones_comerciales: condicionesPayload.condiciones_comerciales,
+      notas: condicionesPayload.notas,
+      garantia: condicionesPayload.garantia,
+      lugar_entrega: condicionesPayload.lugar_entrega,
+      moneda: condicionesPayload.moneda,
+      condiciones_presupuesto: condicionesPayload,
       items,
       ...getAuditUserPayload(),
     };
@@ -1270,7 +1364,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
     } finally {
       setSaving(false);
     }
-  }, [API, buildItemsPayload, clienteSel, cliInput, fecha, observaciones, onSaved, onToast, totals, uploadPresupuestoPdf, validate]);
+  }, [API, buildItemsPayload, clienteSel, cliInput, fecha, observaciones, condiciones, onSaved, onToast, totals, uploadPresupuestoPdf, validate]);
 
   if (!open) return null;
 
@@ -1524,10 +1618,105 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
                       />
                     </div>
 
+                    <div className="presupuesto-terms" aria-label="Condiciones comerciales del presupuesto">
+                      <div className="presupuesto-terms__title">Condiciones comerciales</div>
+                      <div className="presupuesto-terms__row">
+                        <div className="nc-field presupuesto-terms__field presupuesto-terms__field--small">
+                          <input
+                            className="nc-input"
+                            type="number"
+                            min="0"
+                            max="3650"
+                            placeholder=" "
+                            value={condiciones.validezDias}
+                            onChange={(e) => updateCondicion("validezDias", e.target.value)}
+                            disabled={saving}
+                          />
+                          <label className="nc-label">Validez (días)</label>
+                        </div>
+                        <div className="presupuesto-terms__hint">
+                          {condicionesPreview.fecha_validez
+                            ? `Válido hasta ${formatFechaCorta(condicionesPreview.fecha_validez)}`
+                            : "Sin vencimiento informado"}
+                        </div>
+                      </div>
 
+                      <label className="presupuesto-terms__block">
+                        <span>Plazo de entrega / ejecución</span>
+                        <textarea
+                          className="nc-input presupuesto-terms__textarea"
+                          rows={2}
+                          placeholder="Ej: A partir de los 60 días de confirmada la operación."
+                          value={condiciones.plazoEntrega}
+                          onChange={(e) => updateCondicion("plazoEntrega", e.target.value)}
+                          disabled={saving}
+                        />
+                      </label>
+
+                      <div className="presupuesto-terms__row presupuesto-terms__row--split">
+                        <label className="presupuesto-terms__block">
+                          <span>Lugar de entrega / instalación</span>
+                          <textarea
+                            className="nc-input presupuesto-terms__textarea"
+                            rows={2}
+                            placeholder="Opcional: domicilio, local, obra, depósito, etc."
+                            value={condiciones.lugarEntrega}
+                            onChange={(e) => updateCondicion("lugarEntrega", e.target.value)}
+                            disabled={saving}
+                          />
+                        </label>
+                        <label className="presupuesto-terms__block">
+                          <span>Garantía / soporte</span>
+                          <textarea
+                            className="nc-input presupuesto-terms__textarea"
+                            rows={2}
+                            placeholder="Opcional: garantía de fabricación, instalación o servicio."
+                            value={condiciones.garantia}
+                            onChange={(e) => updateCondicion("garantia", e.target.value)}
+                            disabled={saving}
+                          />
+                        </label>
+                      </div>
+
+                      <label className="presupuesto-terms__block">
+                        <span>Forma de pago</span>
+                        <textarea
+                          className="nc-input presupuesto-terms__textarea"
+                          rows={3}
+                          placeholder="Ej: Anticipo para materiales y saldo contra entrega. Efectivo / transferencia / cheque."
+                          value={condiciones.formaPago}
+                          onChange={(e) => updateCondicion("formaPago", e.target.value)}
+                          disabled={saving}
+                        />
+                      </label>
+
+                      <label className="presupuesto-terms__block">
+                        <span>Aclaraciones / condiciones</span>
+                        <textarea
+                          className="nc-input presupuesto-terms__textarea"
+                          rows={3}
+                          placeholder="Ej: Precio sin IVA, no incluye flete, instalación incluida, garantía, etc."
+                          value={condiciones.condicionesComerciales}
+                          onChange={(e) => updateCondicion("condicionesComerciales", e.target.value)}
+                          disabled={saving}
+                        />
+                      </label>
+
+                      <label className="presupuesto-terms__block">
+                        <span>Notas adicionales</span>
+                        <textarea
+                          className="nc-input presupuesto-terms__textarea"
+                          rows={2}
+                          placeholder="Opcional: cualquier aclaración particular para este cliente."
+                          value={condiciones.notas}
+                          onChange={(e) => updateCondicion("notas", e.target.value)}
+                          disabled={saving}
+                        />
+                      </label>
+                    </div>
 
                     <div className="nc-cc-info presupuesto-info">
-                      Se guarda como presupuesto y genera PDF. No impacta caja, ARCA ni medio de pago.
+                      Se guarda como presupuesto y genera PDF con validez, entrega, pago y condiciones. No impacta caja, ARCA ni medio de pago.
                     </div>
                   </div>
                 </div>

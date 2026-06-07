@@ -699,6 +699,11 @@ export default function Presupuestos() {
             ? base.medios_pago_detalle
             : [];
     const medioPagoVenta = safeStr(detalle?.medio_pago_nombre || ventaGenerada?.medio_pago_nombre || base.venta_medio_pago_nombre || base.medio_pago_nombre || "—");
+    const condicionesPresupuesto =
+      (mov.condiciones_presupuesto && typeof mov.condiciones_presupuesto === "object" ? mov.condiciones_presupuesto : null) ||
+      (detalle?.condiciones_presupuesto && typeof detalle.condiciones_presupuesto === "object" ? detalle.condiciones_presupuesto : null) ||
+      (base.condiciones_presupuesto && typeof base.condiciones_presupuesto === "object" ? base.condiciones_presupuesto : null) ||
+      {};
     const convertido = !!(base.convertido_a_venta || conversion?.id_venta || ventaGenerada?.id_venta || ventaGenerada?.id_movimiento);
 
     return {
@@ -731,6 +736,15 @@ export default function Presupuestos() {
       venta_tipo_venta_nombre: safeStr(ventaGenerada?.tipo_venta_nombre || base.venta_tipo_venta_nombre || ""),
       venta_medio_pago_nombre: medioPagoVenta,
       venta_medios_pago_detalle: mediosVenta,
+      condiciones_presupuesto: condicionesPresupuesto,
+      validez_dias: condicionesPresupuesto.validez_dias ?? mov.validez_dias ?? base.validez_dias ?? null,
+      fecha_validez: safeStr(condicionesPresupuesto.fecha_validez || mov.fecha_validez || base.fecha_validez || ""),
+      plazo_entrega: safeStr(condicionesPresupuesto.plazo_entrega || mov.plazo_entrega || base.plazo_entrega || ""),
+      forma_pago: safeStr(condicionesPresupuesto.forma_pago || mov.forma_pago || base.forma_pago || ""),
+      condiciones_comerciales: safeStr(condicionesPresupuesto.condiciones_comerciales || mov.condiciones_comerciales || base.condiciones_comerciales || ""),
+      notas: safeStr(condicionesPresupuesto.notas || mov.notas || base.notas || ""),
+      garantia: safeStr(condicionesPresupuesto.garantia || mov.garantia || base.garantia || ""),
+      lugar_entrega: safeStr(condicionesPresupuesto.lugar_entrega || mov.lugar_entrega || base.lugar_entrega || ""),
     };
   }, []);
 

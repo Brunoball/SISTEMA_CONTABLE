@@ -1725,3 +1725,103 @@ body.dark .doccom-tabsRow .doccom-googleTab.is-active {
   text-overflow: ellipsis;
 }
 
+
+/* =========================================================
+   Presupuestos - condiciones comerciales del PDF
+========================================================= */
+.presupuesto-terms {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border-color, rgba(15, 23, 42, 0.12));
+  border-radius: 16px;
+  background: var(--soft-bg, rgba(15, 23, 42, 0.025));
+}
+
+.presupuesto-terms__title {
+  color: var(--text-color, #111827);
+  font-size: 0.86rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.presupuesto-terms__row {
+  display: grid;
+  grid-template-columns: minmax(120px, 150px) 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.presupuesto-terms__field {
+  margin: 0;
+}
+
+.presupuesto-terms__hint {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  border: 1px dashed var(--border-color, rgba(15, 23, 42, 0.12));
+  border-radius: 13px;
+  padding: 8px 10px;
+  color: var(--muted-color, #64748b);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.presupuesto-terms__block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.presupuesto-terms__block > span {
+  color: var(--muted-color, #64748b);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.presupuesto-terms__textarea {
+  min-height: 68px;
+  height: auto;
+  resize: vertical;
+  padding-top: 10px;
+  line-height: 1.35;
+}
+
+html[data-theme="oscuro"] .presupuesto-terms,
+body.dark .presupuesto-terms {
+  background: rgba(15, 23, 42, 0.42);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+html[data-theme="oscuro"] .presupuesto-terms__hint,
+body.dark .presupuesto-terms__hint {
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+@media (max-width: 720px) {
+  .presupuesto-terms__row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.presupuesto-terms__row--split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 10px;
+}
+
+.presupuesto-terms__row--split .presupuesto-terms__block {
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .presupuesto-terms__row--split {
+    grid-template-columns: 1fr;
+  }
+}

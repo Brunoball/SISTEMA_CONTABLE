@@ -1825,3 +1825,129 @@ body.dark .presupuesto-terms__hint {
     grid-template-columns: 1fr;
   }
 }
+
+/* Condiciones comerciales dentro del contenedor de la tabla del modal Agregar presupuesto */
+.presupuesto-modal__content .mi-cr-table > .presupuesto-terms {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: 0;
+  border-top: 1px solid var(--nv-border-md, var(--border-color, rgba(15, 23, 42, 0.12)));
+  background: var(--nv-bg, var(--soft-bg, rgba(15, 23, 42, 0.025)));
+  overflow: hidden;
+}
+
+.presupuesto-modal__content .mi-cr-table > .presupuesto-terms *,
+.presupuesto-modal__content .mi-cr-table > .presupuesto-terms *::before,
+.presupuesto-modal__content .mi-cr-table > .presupuesto-terms *::after {
+  box-sizing: border-box;
+}
+
+.presupuesto-modal__content .mi-cr-table > .presupuesto-terms .presupuesto-terms__row,
+.presupuesto-modal__content .mi-cr-table > .presupuesto-terms .presupuesto-terms__row--split {
+  min-width: 0;
+}
+
+.presupuesto-modal__content .mi-cr-table > .presupuesto-terms .presupuesto-terms__textarea,
+.presupuesto-modal__content .mi-cr-table > .presupuesto-terms .nc-input {
+  max-width: 100%;
+}
+
+/* Fix modal Agregar presupuesto: condiciones debajo de tabla sin tapar registros */
+.presupuesto-modal__content .mi-cr-table {
+  min-height: 0;
+}
+
+.presupuesto-modal__content .mi-cr-table__rows {
+  flex: 1 1 260px;
+  min-height: 180px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.presupuesto-modal__content .mi-cr-table > .presupuesto-terms {
+  flex: 0 1 auto;
+  max-height: clamp(240px, 34vh, 360px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 14px 12px 12px;
+  gap: 12px;
+  background: var(--nv-bg);
+}
+
+.presupuesto-modal__content .mi-cr-table > .presupuesto-terms .presupuesto-terms__title {
+  padding: 0 2px;
+  color: var(--nv-text);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+}
+
+.presupuesto-modal__content .mi-cr-table > .presupuesto-terms .presupuesto-terms__field {
+  position: relative;
+  min-width: 0;
+}
+
+.presupuesto-modal__content .mi-cr-table > .presupuesto-terms .presupuesto-terms__textarea {
+  width: 100%;
+  min-height: 62px;
+  height: auto;
+  resize: vertical;
+  padding: 16px 10px 8px;
+  line-height: 1.35;
+}
+
+.presupuesto-modal__content .mi-cr-table > .presupuesto-terms .presupuesto-terms__field--small .nc-input {
+  height: 42px;
+  padding-top: 10px;
+}
+
+.presupuesto-modal__content .mi-cr-table > .presupuesto-terms textarea.nc-input + .nc-label {
+  top: 21px;
+}
+
+.presupuesto-modal__content .mi-cr-table > .presupuesto-terms textarea.nc-input:focus + .nc-label,
+.presupuesto-modal__content .mi-cr-table > .presupuesto-terms textarea.nc-input:not(:placeholder-shown) + .nc-label {
+  top: -5px;
+  transform: translateY(0) scale(.82);
+  color: var(--blue-action);
+  background: var(--nv-bg);
+}
+
+.presupuesto-modal__content .mi-cr-table > .presupuesto-terms .presupuesto-terms__hint {
+  min-height: 42px;
+  border-radius: 10px;
+  background: var(--nv-head-bg);
+  border-color: var(--nv-border-md);
+  color: var(--nv-muted);
+}
+
+html[data-theme="oscuro"] .presupuesto-modal__content .mi-cr-table > .presupuesto-terms,
+body.dark .presupuesto-modal__content .mi-cr-table > .presupuesto-terms {
+  background: var(--nv-bg);
+  border-top-color: rgba(255, 255, 255, .10);
+}
+
+html[data-theme="oscuro"] .presupuesto-modal__content .mi-cr-table > .presupuesto-terms textarea.nc-input:focus + .nc-label,
+html[data-theme="oscuro"] .presupuesto-modal__content .mi-cr-table > .presupuesto-terms textarea.nc-input:not(:placeholder-shown) + .nc-label,
+body.dark .presupuesto-modal__content .mi-cr-table > .presupuesto-terms textarea.nc-input:focus + .nc-label,
+body.dark .presupuesto-modal__content .mi-cr-table > .presupuesto-terms textarea.nc-input:not(:placeholder-shown) + .nc-label {
+  color: rgba(140, 190, 255, .92);
+  background: var(--nv-bg);
+}
+
+@media (max-width: 720px) {
+  .presupuesto-modal__content .mi-cr-table__rows {
+    min-height: 220px;
+  }
+
+  .presupuesto-modal__content .mi-cr-table > .presupuesto-terms {
+    max-height: 42vh;
+  }
+}

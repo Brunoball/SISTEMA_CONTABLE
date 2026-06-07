@@ -1538,6 +1538,103 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
                 })}
               </div>
 
+              <div className="presupuesto-terms" aria-label="Condiciones comerciales del presupuesto">
+                <div className="presupuesto-terms__title">Condiciones comerciales</div>
+                <div className="presupuesto-terms__row">
+                  <div className="nc-field presupuesto-terms__field presupuesto-terms__field--small">
+                    <input
+                      className="nc-input"
+                      type="number"
+                      min="0"
+                      max="3650"
+                      placeholder=" "
+                      value={condiciones.validezDias}
+                      onChange={(e) => updateCondicion("validezDias", e.target.value)}
+                      disabled={saving}
+                    />
+                    <label className="nc-label">Validez (días)</label>
+                  </div>
+                  <div className="presupuesto-terms__hint">
+                    {condicionesPreview.fecha_validez
+                      ? `Válido hasta ${formatFechaCorta(condicionesPreview.fecha_validez)}`
+                      : "Sin vencimiento informado"}
+                  </div>
+                </div>
+
+                <div className="nc-field presupuesto-terms__field">
+                  <textarea
+                    className="nc-input presupuesto-terms__textarea"
+                    rows={2}
+                    placeholder=" "
+                    value={condiciones.plazoEntrega}
+                    onChange={(e) => updateCondicion("plazoEntrega", e.target.value)}
+                    disabled={saving}
+                  />
+                  <label className="nc-label">Plazo de entrega / ejecución</label>
+                </div>
+
+                <div className="presupuesto-terms__row presupuesto-terms__row--split">
+                  <div className="nc-field presupuesto-terms__field">
+                    <textarea
+                      className="nc-input presupuesto-terms__textarea"
+                      rows={2}
+                      placeholder=" "
+                      value={condiciones.lugarEntrega}
+                      onChange={(e) => updateCondicion("lugarEntrega", e.target.value)}
+                      disabled={saving}
+                    />
+                    <label className="nc-label">Lugar de entrega / instalación</label>
+                  </div>
+                  <div className="nc-field presupuesto-terms__field">
+                    <textarea
+                      className="nc-input presupuesto-terms__textarea"
+                      rows={2}
+                      placeholder=" "
+                      value={condiciones.garantia}
+                      onChange={(e) => updateCondicion("garantia", e.target.value)}
+                      disabled={saving}
+                    />
+                    <label className="nc-label">Garantía / soporte</label>
+                  </div>
+                </div>
+
+                <div className="nc-field presupuesto-terms__field">
+                  <textarea
+                    className="nc-input presupuesto-terms__textarea"
+                    rows={3}
+                    placeholder=" "
+                    value={condiciones.formaPago}
+                    onChange={(e) => updateCondicion("formaPago", e.target.value)}
+                    disabled={saving}
+                  />
+                  <label className="nc-label">Forma de pago</label>
+                </div>
+
+                <div className="nc-field presupuesto-terms__field">
+                  <textarea
+                    className="nc-input presupuesto-terms__textarea"
+                    rows={3}
+                    placeholder=" "
+                    value={condiciones.condicionesComerciales}
+                    onChange={(e) => updateCondicion("condicionesComerciales", e.target.value)}
+                    disabled={saving}
+                  />
+                  <label className="nc-label">Aclaraciones / condiciones</label>
+                </div>
+
+                <div className="nc-field presupuesto-terms__field">
+                  <textarea
+                    className="nc-input presupuesto-terms__textarea"
+                    rows={2}
+                    placeholder=" "
+                    value={condiciones.notas}
+                    onChange={(e) => updateCondicion("notas", e.target.value)}
+                    disabled={saving}
+                  />
+                  <label className="nc-label">Notas adicionales</label>
+                </div>
+              </div>
+
               <div className="mi-cr-table__foot">
                 <div className="mi-cr-foot-actions">
                   <button type="button" className="nv-foot-btn" onClick={addRow} disabled={saving}>
@@ -1566,6 +1663,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
                   </div>
                 </div>
               </div>
+
             </section>
 
             <div className="mi-cr-filters">
@@ -1618,102 +1716,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
                       />
                     </div>
 
-                    <div className="presupuesto-terms" aria-label="Condiciones comerciales del presupuesto">
-                      <div className="presupuesto-terms__title">Condiciones comerciales</div>
-                      <div className="presupuesto-terms__row">
-                        <div className="nc-field presupuesto-terms__field presupuesto-terms__field--small">
-                          <input
-                            className="nc-input"
-                            type="number"
-                            min="0"
-                            max="3650"
-                            placeholder=" "
-                            value={condiciones.validezDias}
-                            onChange={(e) => updateCondicion("validezDias", e.target.value)}
-                            disabled={saving}
-                          />
-                          <label className="nc-label">Validez (días)</label>
-                        </div>
-                        <div className="presupuesto-terms__hint">
-                          {condicionesPreview.fecha_validez
-                            ? `Válido hasta ${formatFechaCorta(condicionesPreview.fecha_validez)}`
-                            : "Sin vencimiento informado"}
-                        </div>
-                      </div>
 
-                      <label className="presupuesto-terms__block">
-                        <span>Plazo de entrega / ejecución</span>
-                        <textarea
-                          className="nc-input presupuesto-terms__textarea"
-                          rows={2}
-                          placeholder="Ej: A partir de los 60 días de confirmada la operación."
-                          value={condiciones.plazoEntrega}
-                          onChange={(e) => updateCondicion("plazoEntrega", e.target.value)}
-                          disabled={saving}
-                        />
-                      </label>
-
-                      <div className="presupuesto-terms__row presupuesto-terms__row--split">
-                        <label className="presupuesto-terms__block">
-                          <span>Lugar de entrega / instalación</span>
-                          <textarea
-                            className="nc-input presupuesto-terms__textarea"
-                            rows={2}
-                            placeholder="Opcional: domicilio, local, obra, depósito, etc."
-                            value={condiciones.lugarEntrega}
-                            onChange={(e) => updateCondicion("lugarEntrega", e.target.value)}
-                            disabled={saving}
-                          />
-                        </label>
-                        <label className="presupuesto-terms__block">
-                          <span>Garantía / soporte</span>
-                          <textarea
-                            className="nc-input presupuesto-terms__textarea"
-                            rows={2}
-                            placeholder="Opcional: garantía de fabricación, instalación o servicio."
-                            value={condiciones.garantia}
-                            onChange={(e) => updateCondicion("garantia", e.target.value)}
-                            disabled={saving}
-                          />
-                        </label>
-                      </div>
-
-                      <label className="presupuesto-terms__block">
-                        <span>Forma de pago</span>
-                        <textarea
-                          className="nc-input presupuesto-terms__textarea"
-                          rows={3}
-                          placeholder="Ej: Anticipo para materiales y saldo contra entrega. Efectivo / transferencia / cheque."
-                          value={condiciones.formaPago}
-                          onChange={(e) => updateCondicion("formaPago", e.target.value)}
-                          disabled={saving}
-                        />
-                      </label>
-
-                      <label className="presupuesto-terms__block">
-                        <span>Aclaraciones / condiciones</span>
-                        <textarea
-                          className="nc-input presupuesto-terms__textarea"
-                          rows={3}
-                          placeholder="Ej: Precio sin IVA, no incluye flete, instalación incluida, garantía, etc."
-                          value={condiciones.condicionesComerciales}
-                          onChange={(e) => updateCondicion("condicionesComerciales", e.target.value)}
-                          disabled={saving}
-                        />
-                      </label>
-
-                      <label className="presupuesto-terms__block">
-                        <span>Notas adicionales</span>
-                        <textarea
-                          className="nc-input presupuesto-terms__textarea"
-                          rows={2}
-                          placeholder="Opcional: cualquier aclaración particular para este cliente."
-                          value={condiciones.notas}
-                          onChange={(e) => updateCondicion("notas", e.target.value)}
-                          disabled={saving}
-                        />
-                      </label>
-                    </div>
 
                     <div className="nc-cc-info presupuesto-info">
                       Se guarda como presupuesto y genera PDF con validez, entrega, pago y condiciones. No impacta caja, ARCA ni medio de pago.

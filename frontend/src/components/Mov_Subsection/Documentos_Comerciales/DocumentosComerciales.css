@@ -606,7 +606,6 @@ body.dark .doccom-placeholder {
 .doccom-emptyMini span,
 .doccom-emptyStateBig p {
   margin: 0;
-  max-width: 420px;
 }
 
 .doccom-emptyMini--table {
@@ -615,7 +614,6 @@ body.dark .doccom-placeholder {
 
 .doccom-emptyStateBig {
   flex: 1;
-  min-height: 420px;
 }
 
 .doccom-clientSkeleton,
@@ -1951,3 +1949,10 @@ body.dark .presupuesto-modal__content .mi-cr-table > .presupuesto-terms textarea
     max-height: 42vh;
   }
 }
+
+
+/* Presupuestos: gutter inteligente */
+.doccom-presupuestosTable.no-y-scroll > .mov-gridTable--head { scrollbar-gutter:auto; overflow:hidden; }
+.doccom-presupuestosTable.no-y-scroll > .mov-tableWrap { scrollbar-gutter:auto; }
+.doccom-presupuestosTable.has-y-scroll > .mov-gridTable--head { scrollbar-gutter:stable; overflow:auto; }
+.doccom-presupuestosTable.has-y-scroll > .mov-tableWrap { scrollbar-gutter:stable; }

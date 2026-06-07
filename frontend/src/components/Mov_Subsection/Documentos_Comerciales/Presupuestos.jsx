@@ -415,6 +415,8 @@ export default function Presupuestos() {
   const liveTokenRef = useRef("");
   const signedUrlCacheRef = useRef(new Map());
   const cacheRef = useRef(new Map());
+  const tableWrapRef = useRef(null);
+  const [hasTableScroll, setHasTableScroll] = useState(false);
 
   const showToast = useCallback((tipo, mensaje, duracion = 3200) => setToast({ tipo, mensaje, duracion }), []);
   const closeToast = useCallback(() => setToast(null), []);
@@ -1026,6 +1028,33 @@ export default function Presupuestos() {
     return rows.filter((r) => normalizeSearchText(Object.values(r).join(" | ")).includes(qq));
   }, [q, rows]);
 
+  const checkTableScroll = useCallback(() => {
+    const el = tableWrapRef.current;
+    if (!el) return;
+
+    const nextHasScroll = el.scrollHeight > el.clientHeight + 1;
+    setHasTableScroll((prev) => (prev === nextHasScroll ? prev : nextHasScroll));
+  }, []);
+
+  useEffect(() => {
+    const el = tableWrapRef.current;
+    const frameId = requestAnimationFrame(checkTableScroll);
+
+    let resizeObserver = null;
+    if (el && typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(() => checkTableScroll());
+      resizeObserver.observe(el);
+    }
+
+    window.addEventListener("resize", checkTableScroll);
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      window.removeEventListener("resize", checkTableScroll);
+      if (resizeObserver) resizeObserver.disconnect();
+    };
+  }, [checkTableScroll, filteredRows.length, loadingRows, loadingMore, hasMore]);
+
   const dateRangeLabel = useMemo(() => {
     if (dateRange.from && dateRange.to) return `${formatDateUI(dateRange.from)} - ${formatDateUI(dateRange.to)}`;
     if (dateRange.from) return `Desde ${formatDateUI(dateRange.from)}`;
@@ -1041,7 +1070,7 @@ export default function Presupuestos() {
     { key: "total", label: "Total", align: "right", strong: true, render: (r) => moneyARS(r.monto_total) },
     { key: "acciones", label: "Acciones", align: "center" },
   ], []);
-  const gridCols = "0.85fr 2.05fr 1.35fr 1.15fr 1fr 1.55fr";
+  const gridCols = "0.85fr 2.05fr 1.35fr 1.15fr 1fr 1fr";
 
   const exportOptions = useMemo(() => [
     {
@@ -1105,7 +1134,7 @@ export default function Presupuestos() {
       {errorLists && <div className="mov-alert" role="alert">{errorLists}</div>}
       {error && <div className="mov-alert" role="alert">{error}</div>}
 
-      <section className="mov-card mov-card--table">
+      <section className={["mov-card mov-card--table","doccom-presupuestosTable",hasTableScroll ? "has-y-scroll" : "no-y-scroll",].join(" ")}>
         <div className="mov-card__head  doc-card__head">
           <div className="mov-card__headLeft">
             <div className="title-mov doccom-titleBlock">
@@ -1153,7 +1182,7 @@ export default function Presupuestos() {
           {columns.map((c) => <div key={c.key} className={["mov-gridCell", "mov-gridCell--head", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : ""].join(" ")} role="columnheader">{c.label}</div>)}
         </div>
 
-        <div className="mov-tableWrap" role="rowgroup">
+        <div className="mov-tableWrap" role="rowgroup" ref={tableWrapRef}>
           <div className={["mov-gridBody", "mov-gridBody--relative", loadingRows ? "mov-softLoading" : ""].join(" ")}>
             {loadingRows ? <div className="mov-skeletonWrap" aria-busy="true">{Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}</div> : <>
               {filteredRows.map((r) => {

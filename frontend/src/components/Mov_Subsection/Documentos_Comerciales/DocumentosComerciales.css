@@ -1478,8 +1478,8 @@ body.dark .doccom-subpage .doccom-filter .cc-input:focus {
   border-bottom: 0;
   border-radius: 0 0 18px 18px;
   overflow: auto;
-  min-height: calc(100vh - 370px);
-  max-height: calc(100vh - 370px);
+  min-height: calc(100vh - 420px);
+  max-height: calc(100vh - 420px);
 }
 
 

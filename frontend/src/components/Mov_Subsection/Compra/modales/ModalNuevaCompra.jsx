@@ -1380,7 +1380,16 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
       return { ok: false, msg: "Cargá al menos 1 fila válida (Detalle + Cantidad + Precio)." };
     }
 
-    return { ok: true, warn: problems.length > 0 };
+    if (problems.length) {
+      const msg = problems.slice(0, 2).join(" ");
+      const extra = problems.length > 2 ? ` (y ${problems.length - 2} más)` : "";
+      return {
+        ok: false,
+        msg: `Completá o eliminá las filas incompletas antes de guardar. ${msg}${extra}`,
+      };
+    }
+
+    return { ok: true };
   }, [selectedProveedorId, forma, fecha, isContado, mediosFilas, mediosPagoList, rowsCalc, resumen.total, sumaMediosPago]);
 
   const subirYVincularArchivo = useCallback(
@@ -1474,10 +1483,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
     }
 
     setSaving(true);
-
-    if (v.warn) {
-      showToast("advertencia", "Hay filas incompletas: se guardarán solo las válidas.", 3600);
-    }
 
     try {
       const idTipoVenta = isCorriente ? 2 : 1;

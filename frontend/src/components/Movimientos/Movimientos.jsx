@@ -78,6 +78,33 @@ function safeText(v) {
   return s ? s : "-";
 }
 
+function clearMovimientosSessionCache() {
+  try {
+    if (typeof window === "undefined") return;
+    const storage = window.sessionStorage || null;
+    if (!storage) return;
+
+    const prefix = "balto_movimientos_perf_v2:";
+    const scopesToClear = [
+      ":movimientos:listar",
+      ":otros_egresos:listar",
+      ":otros_ingresos:listar",
+      ":flujo_caja",
+    ];
+    const keys = [];
+
+    for (let i = 0; i < storage.length; i += 1) {
+      const key = storage.key(i);
+      if (!key || !key.startsWith(prefix)) continue;
+      if (scopesToClear.some((scope) => key.includes(scope))) keys.push(key);
+    }
+
+    keys.forEach((key) => storage.removeItem(key));
+  } catch {
+    // La limpieza de caché nunca debe romper la vista de movimientos.
+  }
+}
+
 function normalizeComparableText(v) {
   return String(v ?? "")
     .normalize("NFD")
@@ -792,6 +819,46 @@ export default function Movimientos() {
     },
     [setDateRange, invalidateCache]
   );
+
+
+  useEffect(() => {
+    const handleMovimientosMutados = async (event) => {
+      const detail = event?.detail || {};
+      const modulos = Array.isArray(detail?.modulos) ? detail.modulos : [];
+      const afectaMovimientos =
+        detail?.origen === "deposito_cheque_banco" ||
+        modulos.includes("movimientos") ||
+        modulos.includes("otros_egresos") ||
+        modulos.includes("otros_ingresos") ||
+        modulos.includes("ventas") ||
+        modulos.includes("compras") ||
+        modulos.includes("recibos") ||
+        modulos.includes("ordenes_pago");
+
+      if (!afectaMovimientos) return;
+
+      clearMovimientosSessionCache();
+      invalidateCache();
+      liveTokenRef.current = null;
+
+      await loadRows({
+        dateRange,
+        q,
+        offset: 0,
+        append: false,
+      });
+
+      try {
+        const token = await fetchLiveToken(dateRange, q);
+        liveTokenRef.current = token;
+      } catch {}
+    };
+
+    window.addEventListener("balto:movimientos-mutados", handleMovimientosMutados);
+    return () => {
+      window.removeEventListener("balto:movimientos-mutados", handleMovimientosMutados);
+    };
+  }, [dateRange, fetchLiveToken, invalidateCache, loadRows, q]);
 
   const handleLoadMore = useCallback(async () => {
     if (!hasMore || loadingMore || loadingRows || loadingListsCtx) return;

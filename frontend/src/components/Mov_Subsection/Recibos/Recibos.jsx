@@ -66,6 +66,42 @@ function productosLabel(row) {
   return `${cantidad} PRODUCTOS`;
 }
 
+function enriquecerDeudaConRowCompleta(deuda, rowCompleta) {
+  const idDeuda = Number(deuda?.id_movimiento || 0);
+  const idCompleta = Number(rowCompleta?.id_movimiento || 0);
+  if (!idDeuda || !idCompleta || idDeuda !== idCompleta) return deuda;
+
+  const itemsDeuda = Array.isArray(deuda?.items_detalle) ? deuda.items_detalle : [];
+  const itemsCompleta = Array.isArray(rowCompleta?.items_detalle) ? rowCompleta.items_detalle : [];
+  const usarItemsCompletos = itemsCompleta.length > itemsDeuda.length;
+  const itemsFinales = usarItemsCompletos ? itemsCompleta : itemsDeuda;
+
+  return {
+    ...rowCompleta,
+    ...deuda,
+    items_detalle: itemsFinales,
+    cantidad_items:
+      Number(deuda?.cantidad_items || 0) > 0
+        ? Number(deuda.cantidad_items)
+        : Number(rowCompleta?.cantidad_items || itemsFinales.length || 0),
+    detalle:
+      Number(deuda?.cantidad_items || itemsFinales.length || 0) > 0
+        ? productosLabel({ ...deuda, items_detalle: itemsFinales })
+        : deuda?.detalle || rowCompleta?.detalle,
+    detalle_original: deuda?.detalle_original || rowCompleta?.detalle_original,
+    tipo_venta: deuda?.tipo_venta || rowCompleta?.tipo_venta,
+    pago_tipo_venta: deuda?.pago_tipo_venta || rowCompleta?.pago_tipo_venta,
+    clasificacion: deuda?.clasificacion || rowCompleta?.clasificacion,
+    medios_pago_detalle: Array.isArray(deuda?.medios_pago_detalle)
+      ? deuda.medios_pago_detalle
+      : rowCompleta?.medios_pago_detalle,
+    cantidad_medios_pago:
+      Number(deuda?.cantidad_medios_pago || 0) > 0
+        ? Number(deuda.cantidad_medios_pago)
+        : Number(rowCompleta?.cantidad_medios_pago || 0),
+  };
+}
+
 function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
   if (!s) return "—";
@@ -847,8 +883,11 @@ export default function Recibos() {
       try {
         setLoadingClienteDeudas(true);
         const deudas = await fetchRecibosCliente(r);
+        const deudasCompletas = Array.isArray(deudas)
+          ? deudas.map((d) => enriquecerDeudaConRowCompleta(d, r))
+          : [];
         setPagarCliente(r);
-        setPagarDeudas(deudas);
+        setPagarDeudas(deudasCompletas);
         setOpenPagar(true);
       } catch (e) {
         showToast("error", e?.message || "No se pudieron cargar los registros del cliente.");

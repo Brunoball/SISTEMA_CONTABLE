@@ -996,7 +996,13 @@ export default function ModalNuevoIngreso({
           ? `No hay filas válidas. ${problems.slice(0, 2).join(" ")}${problems.length > 2 ? ` (y ${problems.length - 2} más)` : ""}`
           : "Cargá al menos 1 fila válida (Descripción + Cantidad + Importe).",
       };
-    return { ok: true, warn: problems.length > 0, usable };
+    if (problems.length) {
+      return {
+        ok: false,
+        msg: `Completá o eliminá las filas incompletas antes de guardar. ${problems.slice(0, 2).join(" ")}${problems.length > 2 ? ` (y ${problems.length - 2} más)` : ""}`,
+      };
+    }
+    return { ok: true, usable };
   }, [fecha, mediosFilas, mediosPagoList, sumaMediosPago, resumen.total, rowsCalc]);
 
   // ─── Build payload ────────────────────────────────────────────────────────────
@@ -1121,8 +1127,6 @@ export default function ModalNuevoIngreso({
     }
 
     setSaving(true);
-    if (v.warn)
-      showToast("advertencia", "Hay filas incompletas: se guardarán solo las válidas.");
     try {
       const payload = buildPayload();
       const data = await onSubmit(payload, mode === "edit");

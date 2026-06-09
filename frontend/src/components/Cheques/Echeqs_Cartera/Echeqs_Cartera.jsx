@@ -14,6 +14,50 @@ import {
   faBuildingColumns,
 } from "@fortawesome/free-solid-svg-icons";
 
+
+function clearMovimientosAfterDepositoCheque() {
+  try {
+    if (typeof window === "undefined") return;
+
+    const storage = window.sessionStorage || null;
+    const prefix = "balto_movimientos_perf_v2:";
+
+    if (storage) {
+      const scopesToClear = [
+        ":otros_egresos:listar",
+        ":movimientos:listar",
+        ":flujo_caja",
+        ":compras:listar",
+        ":ventas:listar",
+      ];
+      const keys = [];
+
+      for (let i = 0; i < storage.length; i += 1) {
+        const key = storage.key(i);
+        if (!key || !key.startsWith(prefix)) continue;
+
+        if (scopesToClear.some((scope) => key.includes(scope))) {
+          keys.push(key);
+        }
+      }
+
+      keys.forEach((key) => storage.removeItem(key));
+    }
+
+    window.dispatchEvent(
+      new CustomEvent("balto:movimientos-mutados", {
+        detail: {
+          origen: "deposito_cheque_banco",
+          modulos: ["otros_egresos", "movimientos", "flujo_caja"],
+          ts: Date.now(),
+        },
+      })
+    );
+  } catch {
+    // La limpieza de caché nunca debe bloquear el depósito.
+  }
+}
+
 /* =========================
    Helpers auth
 ========================= */
@@ -432,6 +476,8 @@ const Echeqs_Cartera = () => {
           body: JSON.stringify(body),
         })
       );
+
+      clearMovimientosAfterDepositoCheque();
 
       setItems((prev) =>
         (Array.isArray(prev) ? prev : []).filter(

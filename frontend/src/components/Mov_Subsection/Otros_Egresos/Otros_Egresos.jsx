@@ -42,6 +42,24 @@ const PAGE_SIZE = 100;
 const PROBE_LIMIT = PAGE_SIZE + 1;
 const SKELETON_ROWS = 10;
 
+
+function notifyMovimientosMutados(origen = "otros_egresos") {
+  try {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(
+      new CustomEvent("balto:movimientos-mutados", {
+        detail: {
+          origen,
+          modulos: ["otros_egresos", "movimientos", "flujo_caja"],
+          ts: Date.now(),
+        },
+      })
+    );
+  } catch {
+    // No debe bloquear el guardado/eliminado.
+  }
+}
+
 function moneyARS(v) {
   const n = Number(v || 0);
   try {
@@ -1239,6 +1257,7 @@ export default function OtrosEgresos() {
         });
 
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar.");
+        notifyMovimientosMutados(isEdit ? "otros_egresos_actualizar" : "otros_egresos_crear");
         return data;
       } catch (e) {
         const msg = e?.message || "No se pudo guardar.";
@@ -1268,6 +1287,37 @@ export default function OtrosEgresos() {
       showToast("error", msg, 4200);
     }
   }, [dateRange.from, dateRange.to, loadRows, q, showToast]);
+
+  useEffect(() => {
+    const handleMovimientosMutados = (event) => {
+      const detail = event?.detail || {};
+      const modulos = Array.isArray(detail?.modulos) ? detail.modulos : [];
+      const afectaOtrosEgresos =
+        detail?.origen === "deposito_cheque_banco" ||
+        modulos.includes("otros_egresos") ||
+        modulos.includes("movimientos");
+
+      if (!afectaOtrosEgresos) return;
+
+      cacheRef.current.clear();
+      clearMovPerfCache("otros_egresos:listar");
+      signedUrlCacheRef.current.clear();
+      signedUrlInFlightRef.current.clear();
+
+      loadRows({
+        from: dateRange.from,
+        to: dateRange.to,
+        q,
+        offset: 0,
+        append: false,
+      });
+    };
+
+    window.addEventListener("balto:movimientos-mutados", handleMovimientosMutados);
+    return () => {
+      window.removeEventListener("balto:movimientos-mutados", handleMovimientosMutados);
+    };
+  }, [dateRange.from, dateRange.to, loadRows, q]);
 
   const getComprobanteSignedUrl = useCallback(
     async (idComprobante, idMovimiento = null) => {
@@ -1353,6 +1403,8 @@ export default function OtrosEgresos() {
 
       const data = await apiPostJson(`${API}?${sp.toString()}`, { idUsuario });
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar.");
+
+      notifyMovimientosMutados("otros_egresos_eliminar");
 
       if (selectedRow?.id_movimiento === id) {
         setSelectedRow(null);

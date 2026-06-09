@@ -55,8 +55,12 @@ function normalizarMensajeError(mensaje) {
 
   if (
     lower.includes("ya existe un usuario con ese nombre en este tenant") ||
+    lower.includes("ya existe un usuario con ese nombre en este sistema") ||
     lower.includes("usuario con ese nombre en este tenant") ||
-    lower.includes("nombre en este tenant")
+    lower.includes("usuario con ese nombre en este sistema") ||
+    lower.includes("nombre en este tenant") ||
+    lower.includes("duplicate entry") ||
+    lower.includes("uq_usuario_por_tenant")
   ) {
     return "Ya existe un usuario con ese nombre en este sistema.";
   }
@@ -232,6 +236,31 @@ function normalizarFormUsuarioParaComparar(form = {}) {
   };
 }
 
+
+function normalizarNombreUsuarioFront(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function claveUsuarioDuplicado(value) {
+  return normalizarNombreUsuarioFront(value).toLocaleLowerCase("es-AR");
+}
+
+function buscarUsuarioDuplicadoLocal(usuarios = [], usuarioBuscado = "", idUsuarioActual = 0) {
+  const claveBuscada = claveUsuarioDuplicado(usuarioBuscado);
+  const idActual = Number(idUsuarioActual || 0);
+
+  if (!claveBuscada) return null;
+
+  return (
+    usuarios.find((u) => {
+      const idFila = Number(u?.idUsuarioMaster || u?.id_usuario_master || 0);
+      return idFila !== idActual && claveUsuarioDuplicado(u?.usuario) === claveBuscada;
+    }) || null
+  );
+}
+
 function crearFormUsuarioDesdeRegistro(usuario, roles = []) {
   return {
     idUsuarioMaster: Number(usuario.idUsuarioMaster || usuario.id_usuario_master || 0),
@@ -371,7 +400,7 @@ export default function ConfiguracionUsuarios() {
   }, [form, formInicial]);
 
   const modalSaveDisabled = useMemo(() => {
-    const usuario = String(form.usuario || "").trim();
+    const usuario = normalizarNombreUsuarioFront(form.usuario);
     const contrasena = String(form.contrasena || "");
     const rolActual = Number(form.idRolMaster || 0);
 
@@ -425,12 +454,23 @@ export default function ConfiguracionUsuarios() {
     setSaving(true);
 
     try {
-      const usuario = String(form.usuario || "").trim();
+      const usuario = normalizarNombreUsuarioFront(form.usuario);
       const email = String(form.email_recuperacion || "").trim();
       const contrasena = String(form.contrasena || "");
       const rolActual = Number(form.idRolMaster || 0);
 
       if (!usuario) throw new Error("Ingresá el nombre de usuario.");
+
+      const duplicadoLocal = buscarUsuarioDuplicadoLocal(
+        usuarios,
+        usuario,
+        Number(form.idUsuarioMaster || 0)
+      );
+
+      if (duplicadoLocal) {
+        throw new Error("Ya existe un usuario con ese nombre en este sistema.");
+      }
+
       if (!esEdicion && contrasena.length < 6) throw new Error("La contraseña debe tener al menos 6 caracteres.");
       if (esEdicion && contrasena && contrasena.length < 6) throw new Error("La nueva contraseña debe tener al menos 6 caracteres.");
       if (!rolActual) throw new Error("No se pudo detectar el rol actual del usuario. Cerrá el modal y volvé a abrir la edición.");

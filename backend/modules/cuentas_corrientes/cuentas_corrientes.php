@@ -352,8 +352,15 @@ function cc_historial_por_entidad(PDO $pdo, array $cfg): array
   $paramsMov = [
     ':entityId' => $entityId,
     ':tipoOperacion' => $tipoOperacion,
-    ':tipoVenta' => $tipoVenta,
   ];
+
+  $whereTipoVenta = " AND m.id_tipo_venta = :tipoVenta ";
+  if ($entityType === 'cliente') {
+    // Historial completo del cliente: incluye ventas de contado (1) y cuenta corriente (2).
+    $whereTipoVenta = " AND m.id_tipo_venta IN (1, 2) ";
+  } else {
+    $paramsMov[':tipoVenta'] = $tipoVenta;
+  }
 
   if ($fechaDesde !== '') {
     $whereFechasMov .= " AND m.fecha >= :fechaDesde ";
@@ -370,11 +377,12 @@ function cc_historial_por_entidad(PDO $pdo, array $cfg): array
       m.fecha,
       m.monto_total,
       m.id_detalle,
-      m.id_medio_pago
+      m.id_medio_pago,
+      m.id_tipo_venta
     FROM movimientos m
     WHERE m.{$idField} = :entityId
       AND m.id_tipo_operacion = :tipoOperacion
-      AND m.id_tipo_venta = :tipoVenta
+      {$whereTipoVenta}
       {$whereFechasMov}
     ORDER BY m.fecha ASC, m.id_movimiento ASC
   ";
@@ -485,6 +493,29 @@ function cc_historial_por_entidad(PDO $pdo, array $cfg): array
         'sort_tipo'        => 2,
       ];
     }
+
+    // Compatibilidad con ventas de contado antiguas: si la venta fue de contado
+    // y todavía no tiene fila en cobros, se muestra la cancelación para que el
+    // historial quede completo y el saldo no quede inflado artificialmente.
+    if ($entityType === 'cliente' && (int)($m['id_tipo_venta'] ?? 0) === 1 && empty($cobrosDelMovimiento)) {
+      $ledger[] = [
+        'tipo_registro'    => 'cobro',
+        'id'               => 'cob_auto_contado_' . $idMov,
+        'id_movimiento'    => $idMov,
+        'id_cobro'         => null,
+        'id_comprobante'   => null,
+        'fecha_raw'        => $fecha,
+        'fecha'            => cc_format_date($fecha),
+        'comprobante'      => 'Recibo automático / Contado #' . $idMov,
+        'detalle'          => 'Cancelación automática por venta de contado #' . $idMov,
+        'debito'           => 0,
+        'credito'          => $monto,
+        'comprobante_url'  => '',
+        'comprobante_mime' => '',
+        'sort_fecha'       => $fecha ?: '0000-00-00',
+        'sort_tipo'        => 2,
+      ];
+    }
   }
 
   usort($ledger, static function(array $a, array $b): int {
@@ -545,19 +576,39 @@ function cc_saldos_clientes(PDO $pdo): array
       FROM movimientos m
       WHERE m.id_cliente IS NOT NULL
         AND m.id_tipo_operacion = 1
-        AND m.id_tipo_venta = 2
+        AND m.id_tipo_venta IN (1, 2)
       GROUP BY m.id_cliente
     ) deb ON deb.id_cliente = c.id_cliente
     LEFT JOIN (
-      SELECT
-        m.id_cliente,
-        SUM(COALESCE(cob.monto, 0)) AS credito_total
-      FROM cobros cob
-      INNER JOIN movimientos m ON m.id_movimiento = cob.id_movimiento
-      WHERE m.id_cliente IS NOT NULL
-        AND m.id_tipo_operacion = 1
-        AND m.id_tipo_venta = 2
-      GROUP BY m.id_cliente
+      SELECT id_cliente, SUM(credito) AS credito_total
+      FROM (
+        SELECT
+          m.id_cliente,
+          SUM(COALESCE(cob.monto, 0)) AS credito
+        FROM cobros cob
+        INNER JOIN movimientos m ON m.id_movimiento = cob.id_movimiento
+        WHERE m.id_cliente IS NOT NULL
+          AND m.id_tipo_operacion = 1
+          AND m.id_tipo_venta IN (1, 2)
+        GROUP BY m.id_cliente
+
+        UNION ALL
+
+        SELECT
+          m.id_cliente,
+          SUM(COALESCE(m.monto_total, 0)) AS credito
+        FROM movimientos m
+        WHERE m.id_cliente IS NOT NULL
+          AND m.id_tipo_operacion = 1
+          AND m.id_tipo_venta = 1
+          AND NOT EXISTS (
+            SELECT 1
+            FROM cobros cob
+            WHERE cob.id_movimiento = m.id_movimiento
+          )
+        GROUP BY m.id_cliente
+      ) creditos
+      GROUP BY id_cliente
     ) cre ON cre.id_cliente = c.id_cliente
     WHERE COALESCE(c.activo, 1) = 1
     ORDER BY c.nombre ASC

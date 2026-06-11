@@ -65,6 +65,19 @@ function ventas_crear(PDO $pdo): void {
       ':total'         => $it['total'],
     ]);
 
+    if (!empty($v['is_contado']) && (int)($v['id_medio_pago'] ?? 0) > 0) {
+      $insCobro = $pdo->prepare("
+        INSERT INTO cobros (id_movimiento, fecha_cobro, monto, id_medio_pago)
+        VALUES (:id_movimiento, :fecha_cobro, :monto, :id_medio_pago)
+      ");
+      $insCobro->execute([
+        ':id_movimiento' => $newId,
+        ':fecha_cobro'   => $v['fecha'],
+        ':monto'         => $v['monto_total'],
+        ':id_medio_pago' => $v['id_medio_pago'],
+      ]);
+    }
+
     $pdo->commit();
 
     audit_safe($pdo, $idUsuario, 'crear', 'ventas', $newId, [
@@ -167,6 +180,19 @@ function ventas_crear_batch(PDO $pdo): void {
         ':iva_monto'     => $it['iva_monto'],
         ':total'         => $it['total'],
       ]);
+
+      if (!empty($v['is_contado']) && (int)($v['id_medio_pago'] ?? 0) > 0) {
+        $insCobro = $pdo->prepare("
+          INSERT INTO cobros (id_movimiento, fecha_cobro, monto, id_medio_pago)
+          VALUES (:id_movimiento, :fecha_cobro, :monto, :id_medio_pago)
+        ");
+        $insCobro->execute([
+          ':id_movimiento' => $newId,
+          ':fecha_cobro'   => $v['fecha'],
+          ':monto'         => $v['monto_total'],
+          ':id_medio_pago' => $v['id_medio_pago'],
+        ]);
+      }
 
       $ids[] = $newId;
       $auditPack[] = [

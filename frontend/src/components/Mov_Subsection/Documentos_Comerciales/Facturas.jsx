@@ -546,7 +546,6 @@ function DocumentosClientePanel({
         <div className="mov-card__head doccom-clientDocs__head">
           <div className="mov-card__headLeft">
             <div className="title-mov doccom-titleBlock">
-              <div className="mov-card__title">{titulo}</div>
               {navigationTabs && (
                 <div className="doccom-tabsRow doccom-tabsRow--head">
                   {navigationTabs}

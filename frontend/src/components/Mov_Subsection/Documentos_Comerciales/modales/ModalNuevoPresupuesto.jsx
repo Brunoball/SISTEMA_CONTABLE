@@ -1326,12 +1326,17 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
 
     const idCliente = getClienteId(clienteSel);
     const items = buildItemsPayload();
+    const detallePresupuesto = items.map((it) => safeStr(it.descripcion || it.detalle)).filter(Boolean).join(", ");
     const fechaEnvio = String(fecha || "").slice(0, 10);
     const condicionesPayload = normalizeCondicionesPresupuesto(condiciones, fechaEnvio);
     const payload = {
       fecha: fechaEnvio,
       id_cliente: idCliente,
       cliente_nombre: getClienteNombre(clienteSel) || cliInput,
+      detalle: detallePresupuesto,
+      descripcion: detallePresupuesto,
+      concepto: detallePresupuesto,
+      detalle_original: detallePresupuesto,
       subtotal: totals.subtotal,
       iva_total: totals.iva,
       total: totals.total,

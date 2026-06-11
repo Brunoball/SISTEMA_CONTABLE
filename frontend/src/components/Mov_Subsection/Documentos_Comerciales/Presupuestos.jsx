@@ -179,20 +179,55 @@ function detalleProductosLabel(cantidad) {
   return `${n} PRODUCTOS`;
 }
 
+function getItemDetalleText(item) {
+  const raw = item && typeof item === "object" ? item : {};
+  const value =
+    safeStr(raw.descripcion) ||
+    safeStr(raw.detalle) ||
+    safeStr(raw.detalle_nombre) ||
+    safeStr(raw.producto_nombre) ||
+    safeStr(raw.stock_producto_nombre) ||
+    safeStr(raw.nombre) ||
+    safeStr(raw.producto);
+
+  return value && value !== "Producto / Servicio" ? value : "";
+}
+
+function buildDetalleItemsText(items) {
+  const values = (Array.isArray(items) ? items : [])
+    .map(getItemDetalleText)
+    .filter(Boolean);
+
+  return [...new Set(values)].join(", ");
+}
+
+function isResumenProductosText(value) {
+  const text = safeStr(value).toUpperCase();
+  return text === "SIN PRODUCTOS" || /^\d+\s+PRODUCTO(S)?$/.test(text);
+}
+
 function getDetallePresupuesto(row) {
+  const itemsText = buildDetalleItemsText(row?.items_detalle || row?.items);
+  if (itemsText) return itemsText;
+
+  const original = safeStr(row?.detalle_original || row?.descripcion_original || row?.concepto_original);
+  if (original && !isResumenProductosText(original)) return original;
+
+  const detalle = safeStr(row?.detalle || row?.descripcion || row?.concepto);
+  if (detalle && !isResumenProductosText(detalle) && detalle !== "Producto / Servicio") return detalle;
+
   const cantidad = Number(row?.cantidad_items ?? row?.items_detalle?.length ?? 0);
-  if (Number.isFinite(cantidad) && cantidad > 0) return detalleProductosLabel(cantidad);
-  return detalleProductosLabel(0);
+  return detalleProductosLabel(Number.isFinite(cantidad) ? cantidad : 0);
 }
 
 function normalizePresupuestoItemForModal(it, idx = 0, idMovimiento = null) {
   const raw = it && typeof it === "object" ? it : {};
   const nombre =
-    safeStr(raw.producto_nombre) ||
-    safeStr(raw.stock_producto_nombre) ||
-    safeStr(raw.detalle_nombre) ||
     safeStr(raw.descripcion) ||
     safeStr(raw.detalle) ||
+    safeStr(raw.detalle_nombre) ||
+    safeStr(raw.producto_nombre) ||
+    safeStr(raw.stock_producto_nombre) ||
     safeStr(raw.nombre) ||
     "Producto / Servicio";
 
@@ -357,7 +392,7 @@ function buildItemsFacturacionFromPresupuesto(items) {
       id_detalle: null,
       id_stock_producto: Number(it?.id_stock_producto || 0) || null,
       codigo: safeStr(it?.codigo || it?.sku || idx + 1),
-      descripcion: safeStr(it?.descripcion || it?.detalle || it?.producto_nombre || it?.nombre || "Producto / Servicio"),
+      descripcion: safeStr(it?.descripcion || it?.detalle || it?.detalle_nombre || it?.producto_nombre || it?.nombre || "Producto / Servicio"),
       cantidad: Number(it?.cantidad || 0),
       unidad: "u",
       precio_unitario: Number(it?.precio ?? it?.precio_unitario ?? 0),
@@ -483,7 +518,7 @@ export default function Presupuestos() {
   const normalizePresupuestoRow = useCallback((r) => {
     const idMov = getMovimientoId(r);
     const cantidadItems = Number(r?.cantidad_items ?? r?.items_detalle?.length ?? 0) || 0;
-    const detalleOriginal = String(r?.detalle_original ?? r?.detalle ?? r?.descripcion ?? r?.concepto ?? "").trim();
+    const detalleOriginal = String(r?.detalle_original ?? r?.descripcion_original ?? r?.concepto_original ?? r?.detalle ?? r?.descripcion ?? r?.concepto ?? "").trim();
     const ventaGenerada = r?.venta_generada || r?.venta || null;
     const mediosVenta = Array.isArray(r?.venta_medios_pago_detalle)
       ? r.venta_medios_pago_detalle
@@ -500,7 +535,7 @@ export default function Presupuestos() {
       id_cliente: getClienteId(r),
       cliente: String(r?.cliente ?? r?.cliente_nombre ?? "").trim(),
       detalle_original: detalleOriginal,
-      detalle: detalleProductosLabel(cantidadItems),
+      detalle: detalleOriginal && !isResumenProductosText(detalleOriginal) ? detalleOriginal : detalleProductosLabel(cantidadItems),
       cantidad_items: cantidadItems,
       items_detalle: Array.isArray(r?.items_detalle)
         ? r.items_detalle.map((it, idx) => normalizePresupuestoItemForModal(it, idx, idMov))
@@ -716,7 +751,7 @@ export default function Presupuestos() {
       fecha: mov.fecha || base.fecha,
       cliente: safeStr(base.cliente || mov.cliente || base.cliente_nombre || mov.cliente_nombre),
       detalle: detalleProductosLabel(items.length || base.cantidad_items || 0),
-      detalle_original: safeStr(base.detalle_original || mov.detalle_original || items.map((it) => it.producto_nombre).filter(Boolean).join(", ")),
+      detalle_original: safeStr(base.detalle_original || mov.detalle_original || buildDetalleItemsText(items)),
       tipo_operacion_nombre: "PRESUPUESTO",
       operacion: "PRESUPUESTO",
       documento_tipo: "PRESUPUESTO",
@@ -1138,7 +1173,6 @@ export default function Presupuestos() {
         <div className="mov-card__head  doc-card__head">
           <div className="mov-card__headLeft">
             <div className="title-mov doccom-titleBlock">
-              <div className="mov-card__title">Presupuestos</div>
               <div className="doccom-tabsRow doccom-tabsRow--head">
                 <DocumentosTabs activeKey="presupuesto" />
               </div>

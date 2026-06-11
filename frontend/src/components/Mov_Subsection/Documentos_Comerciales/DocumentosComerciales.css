@@ -1493,7 +1493,7 @@ body.dark .doccom-subpage .doccom-filter .cc-input:focus {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  justify-content: flex-end;
   gap: 5px;
 }
 

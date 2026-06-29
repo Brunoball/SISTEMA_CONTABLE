@@ -385,6 +385,14 @@ function buildEmptyMedioPago() {
     loadingCheques: false,
   };
 }
+
+function isMedioPagoRowTouched(mp) {
+  const idMedio = String(mp?.id_medio_pago ?? "").trim();
+  const montoDraft = String(mp?.montoDraft ?? "").trim();
+  const monto = safeNumber(mp?.monto);
+  const cheques = Array.isArray(mp?.id_cheque) ? mp.id_cheque : (mp?.id_cheque ? [mp.id_cheque] : []);
+  return idMedio !== NULL_OPTION || monto > 0 || montoDraft !== "" || cheques.length > 0;
+}
 function buildMediosPagoFromInitial(data) {
   const detalle = Array.isArray(data?.medios_pago_detalle) ? data.medios_pago_detalle : [];
   if (detalle.length) {
@@ -1042,7 +1050,8 @@ export default function ModalNuevoEgreso({
     [rowsCalc]
   );
 
-  const sumaMediosPago = useMemo(() => mediosFilas.reduce((a, r) => a + safeNumber(r.monto), 0), [mediosFilas]);
+  const mediosFilasActivas = useMemo(() => mediosFilas.filter(isMedioPagoRowTouched), [mediosFilas]);
+  const sumaMediosPago = useMemo(() => mediosFilasActivas.reduce((a, r) => a + safeNumber(r.monto), 0), [mediosFilasActivas]);
 
   const validate = useCallback(() => {
     const clas = Number(filters.id_clasificacion);
@@ -1053,8 +1062,8 @@ export default function ModalNuevoEgreso({
       return { ok: false, msg: "La fecha no puede ser posterior al día actual." };
     }
 
-    for (let i = 0; i < mediosFilas.length; i++) {
-      const mp = mediosFilas[i];
+    for (let i = 0; i < mediosFilasActivas.length; i++) {
+      const mp = mediosFilasActivas[i];
       if (!mp.id_medio_pago || mp.id_medio_pago === NULL_OPTION)
         return { ok: false, msg: `Medio de pago ${i + 1}: falta seleccionar el medio.` };
       if (safeNumber(mp.monto) <= 0) return { ok: false, msg: `Medio de pago ${i + 1}: el monto debe ser mayor a 0.` };
@@ -1069,10 +1078,10 @@ export default function ModalNuevoEgreso({
           };
       }
     }
-    if (sumaMediosPago < resumen.total - 0.05 && resumen.total > 0)
+    if (sumaMediosPago > resumen.total + 0.05 && resumen.total > 0)
       return {
         ok: false,
-        msg: `La suma de los medios de pago (${moneyARS(sumaMediosPago)}) no cubre el total del egreso (${moneyARS(resumen.total)}).`,
+        msg: `La suma de los medios de pago (${moneyARS(sumaMediosPago)}) no puede superar el total del egreso (${moneyARS(resumen.total)}).`,
       };
     const problems = [];
     rowsCalc.forEach((r, i) => {
@@ -1099,7 +1108,7 @@ export default function ModalNuevoEgreso({
       };
     }
     return { ok: true, usable };
-  }, [filters, fecha, rowsCalc, mediosFilas, mediosPagoList, resumen.total, sumaMediosPago]);
+  }, [filters, fecha, rowsCalc, mediosFilasActivas, mediosPagoList, resumen.total, sumaMediosPago]);
 
   const buildPayload = useCallback(() => {
     const usableRows = rowsCalc.filter(
@@ -1111,7 +1120,7 @@ export default function ModalNuevoEgreso({
     const ivaFinal = usableRows.reduce((acc, x) => acc + safeNumber(x.ivaMonto), 0);
     const totalFinal = usableRows.reduce((acc, x) => acc + safeNumber(x.total), 0);
     const movId = getMovimientoId(initialData);
-    const mediosPagoPayload = mediosFilas.flatMap((mp) => {
+    const mediosPagoPayload = mediosFilasActivas.flatMap((mp) => {
       const chequesSeleccionados = Array.isArray(mp.id_cheque) ? mp.id_cheque : [];
       const mpRow = mediosPagoList.find((x) => String(getMedioPagoId(x) ?? "") === String(mp.id_medio_pago));
       const tipoCheque = normalizeChequeTipoFromMedio(mpRow?.nombre || "");
@@ -1170,7 +1179,7 @@ export default function ModalNuevoEgreso({
         total: safeNumber(x.total),
       })),
     };
-  }, [rowsCalc, initialData, fecha, filters, mediosFilas, mediosPagoList, clasificacionConfig, isCostoFijoChecked, isNoCostoFijoChecked]);
+  }, [rowsCalc, initialData, fecha, filters, mediosFilasActivas, mediosPagoList, clasificacionConfig, isCostoFijoChecked, isNoCostoFijoChecked]);
 
   const subirArchivo = useCallback(
     async (idMovimiento, archivo) => {

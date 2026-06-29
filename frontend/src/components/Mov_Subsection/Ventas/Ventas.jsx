@@ -34,6 +34,7 @@ import * as XLSX from "xlsx";
 import { useListas } from "../../../context/ListasContext.jsx";
 import { useDateRange } from "../../../context/DateRangeContext";
 import { readMovPerfCache, writeMovPerfCache, clearMovPerfCache } from "../_shared/performanceCache.js";
+import { getDetalleMovimiento } from "../_shared/detalleMovimiento.js";
 
 const MIN_LOADING_MS = 0;
 const FORCE_SHOW_LOADER_DEV = false;
@@ -47,13 +48,7 @@ const PREWARM_DELAY_MS = 60;
 function moneyARS(v) { const n = Number(v || 0); try { return n.toLocaleString("es-AR", { style: "currency", currency: "ARS" }); } catch { return `$${n.toFixed(2)}`; } }
 function safeText(v) { const s = String(v ?? "").trim(); return s ? s : "—"; }
 function productosLabel(row) {
-  const cantidadDesdeCampo = Number(row?.cantidad_items || 0);
-  const cantidadDesdeItems = Array.isArray(row?.items_detalle) ? row.items_detalle.length : 0;
-  const cantidad = cantidadDesdeCampo > 0 ? cantidadDesdeCampo : cantidadDesdeItems;
-
-  if (cantidad <= 0) return "SIN PRODUCTOS";
-  if (cantidad === 1) return "1 PRODUCTO";
-  return `${cantidad} PRODUCTOS`;
+  return getDetalleMovimiento(row);
 }
 function normalizeSearchText(v) { return String(v ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim(); }
 function formatFechaDMY(v) {

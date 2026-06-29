@@ -59,20 +59,44 @@ if (!function_exists('wsfe_digits')) {
     }
 }
 
+if (!function_exists('wsfe_valid_ymd')) {
+    function wsfe_valid_ymd(string $digits): bool
+    {
+        if (!preg_match('/^\d{8}$/', $digits)) {
+            return false;
+        }
+        $y = (int)substr($digits, 0, 4);
+        $m = (int)substr($digits, 4, 2);
+        $d = (int)substr($digits, 6, 2);
+        return checkdate($m, $d, $y);
+    }
+}
+
 if (!function_exists('wsfe_date_ymd')) {
     function wsfe_date_ymd($v): string
     {
         $s = wsfe_str($v);
         if ($s === '') {
-            return date('Ymd');
+            return '';
         }
 
         $digits = wsfe_digits($s);
-        if (preg_match('/^\d{8}$/', $digits)) {
+        if (wsfe_valid_ymd($digits)) {
             return $digits;
         }
 
-        return date('Ymd');
+        return '';
+    }
+}
+
+if (!function_exists('wsfe_require_date_ymd')) {
+    function wsfe_require_date_ymd($v, string $label): string
+    {
+        $ymd = wsfe_date_ymd($v);
+        if ($ymd === '') {
+            throw new RuntimeException('La ' . $label . ' es obligatoria y debe venir desde el modal en formato AAAA-MM-DD o YYYYMMDD. No se inventa fecha en el backend.');
+        }
+        return $ymd;
     }
 }
 
@@ -91,13 +115,13 @@ if (!function_exists('wsfe_plus_days_ymd')) {
     function wsfe_plus_days_ymd(string $baseYmd, int $days): string
     {
         $digits = wsfe_digits($baseYmd);
-        if (!preg_match('/^\d{8}$/', $digits)) {
-            $digits = date('Ymd');
+        if (!wsfe_valid_ymd($digits)) {
+            throw new RuntimeException('Fecha base inválida para calcular vencimiento.');
         }
 
-        $dt = DateTime::createFromFormat('Ymd', $digits);
+        $dt = DateTime::createFromFormat('!Ymd', $digits);
         if (!$dt) {
-            $dt = new DateTime('now');
+            throw new RuntimeException('No se pudo interpretar la fecha base para calcular vencimiento.');
         }
 
         $dt->modify(($days >= 0 ? '+' : '') . $days . ' days');
@@ -329,6 +353,27 @@ try {
     $cbtesAsoc = wsfe_normalize_cbtes_asoc($data['cbtes_asoc'] ?? []);
     wsfe_validate_cbtes_asoc_or_fail($cbteTipo, $cbtesAsoc);
 
+    // Seguridad multi CUIT: una nota de crédito debe emitirse con el mismo
+    // CUIT que emitió la factura original asociada. Si el frontend manda una
+    // config equivocada, se corta antes de pedir CAE a ARCA.
+    if (wsfe_is_nota_credito_tipo($cbteTipo)) {
+        $cuitCfgEmisor = wsfe_digits($cfg['cuit'] ?? ($cfg['tenant']['arca_cuit'] ?? ''));
+        foreach ($cbtesAsoc as $asoc) {
+            $cuitAsoc = wsfe_digits($asoc['cuit'] ?? '');
+            if ($cuitCfgEmisor !== '' && $cuitAsoc !== '' && $cuitCfgEmisor !== $cuitAsoc) {
+                wsfe_json_error(
+                    'La nota de crédito debe emitirse con la misma cuenta fiscal de la factura original. Emisor seleccionado: ' . $cuitCfgEmisor . ' / Factura original: ' . $cuitAsoc,
+                    422,
+                    [
+                        'cuit_emisor_seleccionado' => $cuitCfgEmisor,
+                        'cuit_factura_original' => $cuitAsoc,
+                        'cbtes_asoc' => $cbtesAsoc,
+                    ]
+                );
+            }
+        }
+    }
+
     $impNeto = 0.00;
     $impIva  = 0.00;
     $impEx   = 0.00;
@@ -393,7 +438,7 @@ try {
         ?: ($impNeto + $impIva + $impTrib + $impEx + $impTotConc)
     );
 
-    $fechaCbte = wsfe_date_ymd($data['fecha_cbte_iso'] ?? $data['fecha_cbte'] ?? date('Y-m-d'));
+    $fechaCbte = wsfe_require_date_ymd($data['fecha_cbte_iso'] ?? $data['fecha_cbte'] ?? null, 'fecha del comprobante');
 
     $periodoDesde = wsfe_date_ymd(
         $data['fch_serv_desde'] ??

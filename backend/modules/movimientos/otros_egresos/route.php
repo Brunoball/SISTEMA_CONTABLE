@@ -1,10 +1,21 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/otros_egresos.php';
-require_once __DIR__ . '/comprobantes_egresos.php';
+require_once __DIR__ . '/helpers.php';
+require_once __DIR__ . '/crud.php';
+require_once __DIR__ . '/detalles.php';
 
 $action = strtolower(trim((string)($_GET['action'] ?? $_POST['action'] ?? '')));
+
+if ($action === '' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+  $raw = file_get_contents('php://input');
+  if ($raw) {
+    $json = json_decode($raw, true);
+    if (is_array($json) && isset($json['action'])) {
+      $action = strtolower(trim((string)$json['action']));
+    }
+  }
+}
 
 switch ($action) {
   case 'otros_egresos_listar':
@@ -23,25 +34,26 @@ switch ($action) {
     otros_egresos_actualizar($pdo);
     break;
 
+  case 'otros_egresos_confirmar_pago':
+    otros_egresos_confirmar_pago($pdo);
+    break;
+
   case 'otros_egresos_eliminar':
     otros_egresos_eliminar($pdo);
     break;
 
+  case 'otros_egresos_detalles_crear':
+    otros_egresos_detalles_crear($pdo);
+    break;
+
   case 'otros_egresos_comprobantes_vincular_movimiento_upload':
-    otros_egresos_comprobantes_vincular_movimiento_upload($pdo);
-    break;
-
+  case 'otros_egresos_comprobantes_vincular_movimiento':
   case 'otros_egresos_comprobantes_info':
-    otros_egresos_comprobantes_info($pdo);
-    break;
-
   case 'otros_egresos_comprobantes_descargar':
-    otros_egresos_comprobantes_descargar($pdo);
+  case 'otros_egresos_comprobantes_eliminar':
+    require_once __DIR__ . '/../global/comprobantes.php';
     break;
 
-  case 'otros_egresos_comprobantes_eliminar':
-    otros_egresos_comprobantes_eliminar($pdo);
-    break;
 
   default:
     http_response_code(404);

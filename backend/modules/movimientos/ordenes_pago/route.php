@@ -16,7 +16,6 @@ if (!function_exists('route_movimientos_ordenes_pago')) {
       case 'ordenes_pago_actualizar':
       case 'ordenes_pago_eliminar':
       case 'ordenes_pago_confirmar_pago':
-      case 'ordenes_pago_cheques_cartera_listar':
         require __DIR__ . '/ordenes_pago.php';
         return true;
 
@@ -24,10 +23,15 @@ if (!function_exists('route_movimientos_ordenes_pago')) {
          COMPROBANTES DE ÓRDENES DE PAGO
       ========================= */
       case 'ordenes_pago_comprobante_subir_y_vincular':
+      case 'ordenes_pago_comprobantes_subir_y_vincular':
       case 'ordenes_pago_comprobante_asociar_movimientos':
+      case 'ordenes_pago_comprobantes_asociar_movimientos':
       case 'ordenes_pago_comprobante_descargar':
+      case 'ordenes_pago_comprobantes_descargar':
       case 'ordenes_pago_comprobante_info':
-        require __DIR__ . '/comprobantes_ordenes_de_pago.php';
+      case 'ordenes_pago_comprobantes_info':
+        global $pdo;
+        require_once __DIR__ . '/../global/comprobantes.php';
         return true;
 
       default:

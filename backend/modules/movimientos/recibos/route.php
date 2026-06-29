@@ -6,8 +6,6 @@ if (!defined('MOVIMIENTOS_RECIBOS_ROUTE_BOOTSTRAP')) {
 }
 
 require_once __DIR__ . '/recibos.php';
-require_once __DIR__ . '/comprobantes_recibos.php';
-require_once __DIR__ . '/cheques_recibos.php';
 
 if (!function_exists('route_movimientos_recibos')) {
   function route_movimientos_recibos(string $action): bool
@@ -21,11 +19,8 @@ if (!function_exists('route_movimientos_recibos')) {
       return true;
     }
 
-    if (function_exists('route_recibos_comprobantes_action') && route_recibos_comprobantes_action($pdo, $action)) {
-      return true;
-    }
-
-    if (function_exists('route_recibos_cheques_action') && route_recibos_cheques_action($pdo, $action)) {
+    if (strpos($action, 'recibos_comprobantes_') === 0) {
+      require_once __DIR__ . '/../global/comprobantes.php';
       return true;
     }
 

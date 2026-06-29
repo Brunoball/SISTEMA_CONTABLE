@@ -273,6 +273,15 @@ function buildEmptyMedioPago() {
   };
 }
 
+
+function isMedioPagoRowTouched(mp) {
+  const idMedio = String(mp?.id_medio_pago ?? "").trim();
+  const montoDraft = String(mp?.montoDraft ?? "").trim();
+  const monto = safeNumber(mp?.monto);
+  const cheques = Array.isArray(mp?.id_cheque) ? mp.id_cheque : (mp?.id_cheque ? [mp.id_cheque] : []);
+  return idMedio !== NULL_OPTION || monto > 0 || montoDraft !== "" || cheques.length > 0;
+}
+
 function buildMediosPagoFromInitial(data) {
   const detalle = Array.isArray(data?.medios_pago_detalle) ? data.medios_pago_detalle : [];
 
@@ -1501,7 +1510,8 @@ export default function ModalEditarEgreso({
           .filter((it) => it.id_detalle > 0 && it.cantidad > 0 && it.precio > 0 && it.total > 0);
         if (!items.length) throw new Error("Debés cargar al menos un ítem válido.");
 
-        const mediosPagoPayload = (form.medios || []).flatMap((mp, idx) => {
+        const mediosEditables = (form.medios || []).filter(isMedioPagoRowTouched);
+        const mediosPagoPayload = mediosEditables.flatMap((mp, idx) => {
           const idMedioPago = Number(mp.id_medio_pago || 0);
           const medioRow = mediosPago.find((x) => String(getMedioPagoId(x) ?? "") === String(mp.id_medio_pago));
           const tipoCheque = normalizeChequeTipoFromMedio(medioRow?.nombre || "");
@@ -1537,8 +1547,8 @@ export default function ModalEditarEgreso({
 
         const totalMedios = mediosPagoPayload.reduce((acc, mp) => acc + safeNumber(mp.monto), 0);
         const totalItems = sumTotalItems(items);
-        if (totalMedios < totalItems - 0.05) {
-          throw new Error(`La suma de los medios de pago (${moneyARS(totalMedios)}) no cubre el total del egreso (${moneyARS(totalItems)}).`);
+        if (totalMedios > totalItems + 0.05) {
+          throw new Error(`La suma de los medios de pago (${moneyARS(totalMedios)}) no puede superar el total del egreso (${moneyARS(totalItems)}).`);
         }
 
         const primerMedio = mediosPagoPayload[0] || null;

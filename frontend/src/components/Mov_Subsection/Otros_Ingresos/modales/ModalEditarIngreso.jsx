@@ -610,10 +610,10 @@ function PanelMediosPago({
           Asignado: <b>{moneyARS(sumaMediosPago)}</b>
         </span>
         {diferenciaRestante > 0.01 && (
-          <span className="nc-mp-totals-falta">Falta: {moneyARS(diferenciaRestante)}</span>
+          <span className="nc-mp-totals-falta">Pendiente: {moneyARS(diferenciaRestante)}</span>
         )}
         {diferenciaRestante <= 0.01 && sumaMediosPago > 0 && (
-          <span className="nc-mp-totals-ok">✓ Cubierto</span>
+          <span className="nc-mp-totals-ok">✓ Cobro completo</span>
         )}
       </div>
 
@@ -1076,12 +1076,15 @@ export default function ModalEditarIngreso({
       return { ok: false, msg: "La fecha no puede ser posterior al día actual." };
     }
 
-    if (!Array.isArray(form.medios) || !form.medios.length)
-      return { ok: false, msg: "Debés cargar al menos un medio de pago." };
+    const mediosValidables = Array.isArray(form.medios) ? form.medios : [];
 
-    for (let i = 0; i < form.medios.length; i++) {
-      const mp = form.medios[i];
-      if (!(Number(mp.id_medio_pago || 0) > 0))
+    for (let i = 0; i < mediosValidables.length; i++) {
+      const mp = mediosValidables[i];
+      const tieneMedio = Number(mp.id_medio_pago || 0) > 0;
+      const tieneMonto = safeNumber(mp.monto) > 0 || safeNumber(mp.cheque?.importe) > 0;
+      const tieneCheque = !!mp.cheque;
+      if (!tieneMedio && !tieneMonto && !tieneCheque) continue;
+      if (!tieneMedio)
         return { ok: false, msg: `Medio de pago ${i + 1}: falta seleccionar el medio.` };
       const medio = mediosPago.find((x) => String(x.id) === String(mp.id_medio_pago));
       const tipoCheque = detectChequeTipo(medio?.nombre || "");
@@ -1096,10 +1099,10 @@ export default function ModalEditarIngreso({
       }
     }
 
-    if (sumaMediosPago < totalGeneral - 0.05 && totalGeneral > 0)
+    if (sumaMediosPago > totalGeneral + 0.05 && totalGeneral > 0)
       return {
         ok: false,
-        msg: `La suma de los medios de pago (${moneyARS(sumaMediosPago)}) no cubre el total del ingreso (${moneyARS(totalGeneral)}).`,
+        msg: `La suma de los medios de pago (${moneyARS(sumaMediosPago)}) no puede superar el total del ingreso (${moneyARS(totalGeneral)}).`,
       };
 
     const items = (form.items || [])
@@ -1152,13 +1155,15 @@ export default function ModalEditarIngreso({
         id_medio_pago: Number(form.medios?.[0]?.id_medio_pago || 0),
         id_detalle: items[0]?.id_detalle ?? null,
         monto_total: sumTotalItems(items),
-        medios_pago: (form.medios || []).map((mp) => ({
-          id_movimiento_medio_pago: mp.id_movimiento_medio_pago || null,
-          id_medio_pago: Number(mp.id_medio_pago || 0),
-          monto: safeNumber(mp.cheque?.importe ?? mp.monto),
-          id_cheque: mp.id_cheque || null,
-          cheque_tipo: mp.cheque?.tipo_cheque || null,
-        })),
+        medios_pago: (form.medios || [])
+          .filter((mp) => Number(mp.id_medio_pago || 0) > 0 && safeNumber(mp.cheque?.importe ?? mp.monto) > 0)
+          .map((mp) => ({
+            id_movimiento_medio_pago: mp.id_movimiento_medio_pago || null,
+            id_medio_pago: Number(mp.id_medio_pago || 0),
+            monto: safeNumber(mp.cheque?.importe ?? mp.monto),
+            id_cheque: mp.id_cheque || null,
+            cheque_tipo: mp.cheque?.tipo_cheque || null,
+          })),
         items,
       };
 

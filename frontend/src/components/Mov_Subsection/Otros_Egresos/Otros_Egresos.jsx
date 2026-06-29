@@ -12,6 +12,7 @@ import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 import ModalNuevoEgreso from "./modales/ModalNuevoEgreso.jsx";
 import ModalEditarEgreso from "./modales/ModalEditarEgreso.jsx";
+import ModalPagarOtrosEgresos from "./modales/ModalPagarOtrosEgresos.jsx";
 import { ModalDetalleMovimientoEgreso } from "../../Global/Modales/ModalDetalleMovimiento.jsx";
 import ModalEliminar from "../../Global/Modales/ModalEliminar.jsx";
 
@@ -29,12 +30,14 @@ import {
   faEye,
   faBoxOpen,
   faInfoCircle,
+  faMoneyBill1Wave,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
 import { useListas } from "../../../context/ListasContext.jsx";
 import { useDateRange } from "../../../context/DateRangeContext.jsx";
 import { readMovPerfCache, writeMovPerfCache, clearMovPerfCache } from "../_shared/performanceCache.js";
+import { getDetalleMovimiento } from "../_shared/detalleMovimiento.js";
 
 const MIN_LOADING_MS = 0;
 const FORCE_SHOW_LOADER_DEV = false;
@@ -327,14 +330,7 @@ function withDepositoChequeDetalle(row) {
 function productosLabel(row) {
   const depositoLabel = getDepositoChequeLabel(row);
   if (depositoLabel) return depositoLabel;
-
-  const cantidadDesdeCampo = Number(row?.cantidad_items || 0);
-  const cantidadDesdeItems = Array.isArray(row?.items_detalle) ? row.items_detalle.length : 0;
-  const cantidad = cantidadDesdeCampo > 0 ? cantidadDesdeCampo : cantidadDesdeItems;
-
-  if (cantidad <= 0) return "SIN PRODUCTOS";
-  if (cantidad === 1) return "1 PRODUCTO";
-  return `${cantidad} PRODUCTOS`;
+  return getDetalleMovimiento(row);
 }
 
 function normalizeSearchText(v) {
@@ -568,6 +564,62 @@ function hasOtroEgresoDetalleMedios(row) {
   return getOtroEgresoCantidadMedios(row) > 0;
 }
 
+function getOtroEgresoTotal(row) {
+  const n = Number(row?.monto_total ?? row?.total ?? row?.total_general ?? 0);
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
+function getOtroEgresoPagado(row) {
+  const explicit = Number(
+    row?.pagado_total ?? row?.monto_pagado ?? row?.total_pagado ?? row?.cobrado_total ?? NaN
+  );
+  if (Number.isFinite(explicit)) return Math.max(0, explicit);
+
+  return getOtroEgresoMediosDetalle(row).reduce((acc, mp) => {
+    const n = Number(mp?.monto ?? mp?.importe ?? 0);
+    return acc + (Number.isFinite(n) ? Math.max(0, n) : 0);
+  }, 0);
+}
+
+function getOtroEgresoSaldo(row) {
+  for (const key of ["saldo_pendiente", "saldo_restante", "monto_pendiente", "pendiente", "saldo"]) {
+    if (row?.[key] !== undefined && row?.[key] !== null && row?.[key] !== "") {
+      const n = Number(row[key]);
+      if (Number.isFinite(n)) return Math.max(0, n);
+    }
+  }
+  return Math.max(0, getOtroEgresoTotal(row) - getOtroEgresoPagado(row));
+}
+
+function getOtroEgresoEstadoPago(row) {
+  const estado = String(row?.estado_pago ?? row?.estadoPago ?? "").trim().toLowerCase();
+  if (estado) return estado;
+  const total = getOtroEgresoTotal(row);
+  const pagado = getOtroEgresoPagado(row);
+  const saldo = getOtroEgresoSaldo(row);
+  if (total <= 0.009 || saldo <= 0.009) return "pagado";
+  if (pagado > 0.009) return "pendiente_parcial";
+  return "pendiente";
+}
+
+function getOtroEgresoEstadoLabel(row) {
+  const estado = getOtroEgresoEstadoPago(row);
+  if (estado === "pagado" || estado === "cobrado") return "PAGADO";
+  if (estado === "pendiente_parcial" || estado === "parcial") return "PENDIENTE PARCIAL";
+  return "PENDIENTE";
+}
+
+function getOtroEgresoEstadoChipClass(row) {
+  const estado = getOtroEgresoEstadoPago(row);
+  if (estado === "pagado" || estado === "cobrado") return "mov-chip mov-chip--ok";
+  if (estado === "pendiente_parcial" || estado === "parcial") return "mov-chip mov-chip--warn mov-chip--partial";
+  return "mov-chip mov-chip--warn";
+}
+
+function isOtroEgresoPagado(row) {
+  return getOtroEgresoSaldo(row) <= 0.009;
+}
+
 function getEgresoIdComprobante(row) {
   const n = Number(row?.id_comprobante ?? row?.comprobante_id ?? 0);
   return Number.isFinite(n) && n > 0 ? n : null;
@@ -604,6 +656,10 @@ function normalizeOtroEgresoRow(r) {
     tiene_comprobante: idComprobante > 0 || comprobanteUrl !== "",
     medios_pago_detalle: mediosPagoDetalle,
     cantidad_medios_pago: cantidadMediosPago,
+    pagado_total: getOtroEgresoPagado(r),
+    saldo_pendiente: getOtroEgresoSaldo(r),
+    estado_pago: getOtroEgresoEstadoPago(r),
+    pagado: isOtroEgresoPagado(r),
   };
 }
 
@@ -661,6 +717,8 @@ function buildExportRows(rows) {
     FECHA: safeText(formatFechaDMY(r?.fecha)),
     DESCRIPCION: productosLabel(r),
     TOTAL: Number(r?.monto_total ?? r?.total ?? r?.total_general ?? 0) || 0,
+    SALDO: getOtroEgresoSaldo(r),
+    ESTADO: getOtroEgresoEstadoLabel(r),
   }));
 }
 
@@ -716,8 +774,10 @@ export default function OtrosEgresos() {
 
   const [openAdd, setOpenAdd] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
+  const [openPagar, setOpenPagar] = useState(false);
   const [openMediosPago, setOpenMediosPago] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
+  const [selectedMediosRow, setSelectedMediosRow] = useState(null);
 
   const [openDelete, setOpenDelete] = useState(false);
   const [rowToDelete, setRowToDelete] = useState(null);
@@ -1076,7 +1136,7 @@ export default function OtrosEgresos() {
       {
         key: "total",
         label: "TOTAL",
-        fr: 1.1,
+        fr: 1.05,
         align: "right",
         render: (r) => (
           <span className="fc-num fc-eg">
@@ -1084,7 +1144,25 @@ export default function OtrosEgresos() {
           </span>
         ),
       },
-      { key: "acciones", label: "ACCIONES", fr: 1.15, align: "center", render: () => null },
+      {
+        key: "saldo_pendiente",
+        label: "SALDO",
+        fr: 1.05,
+        align: "right",
+        render: (r) => <span className="fc-num">{moneyARS(getOtroEgresoSaldo(r))}</span>,
+      },
+      {
+        key: "estado_pago",
+        label: "ESTADO",
+        fr: 1.15,
+        align: "center",
+        render: (r) => (
+          <span className={getOtroEgresoEstadoChipClass(r)}>
+            {getOtroEgresoEstadoLabel(r)}
+          </span>
+        ),
+      },
+      { key: "acciones", label: "ACCIONES", fr: 1.5, align: "center", render: () => null },
     ];
   }, []);
 
@@ -1527,12 +1605,40 @@ export default function OtrosEgresos() {
   );
 
   const handleOpenMediosPago = useCallback((row) => {
-    setSelectedRow(withDepositoChequeDetalle(row));
+    setSelectedMediosRow(withDepositoChequeDetalle(row));
     setOpenMediosPago(true);
   }, []);
 
   const handleCloseMediosPago = useCallback(() => {
     setOpenMediosPago(false);
+    setSelectedMediosRow(null);
+  }, []);
+
+  const handleOpenPagar = useCallback((row) => {
+    const normalized = normalizeOtroEgresoRow(row || {});
+    const id = getMovimientoId(normalized);
+
+    if (!id) {
+      showToast("error", "No se encontró el ID del egreso para pagar.", 3200);
+      return;
+    }
+
+    if (isDepositoChequeEgreso(normalized)) {
+      showToast("advertencia", "Los egresos generados por depósito de cheque/eCheq no se pagan desde este modal.", 3600);
+      return;
+    }
+
+    if (isOtroEgresoPagado(normalized)) {
+      showToast("advertencia", "Este egreso ya está pagado completamente.", 2800);
+      return;
+    }
+
+    setSelectedRow({ ...normalized, id_movimiento: id });
+    setOpenPagar(true);
+  }, [showToast]);
+
+  const handleClosePagar = useCallback(() => {
+    setOpenPagar(false);
     setSelectedRow(null);
   }, []);
 
@@ -1607,6 +1713,8 @@ export default function OtrosEgresos() {
       fecha: ["44%", "38%", "40%", "36%"],
       detalle: ["72%", "58%", "66%", "48%"],
       total: ["38%", "30%", "34%", "28%"],
+      saldo_pendiente: ["38%", "30%", "34%", "28%"],
+      estado_pago: ["52%", "46%", "58%", "42%"],
     }),
     []
   );
@@ -1952,6 +2060,18 @@ export default function OtrosEgresos() {
                                 {!esDepositoChequeEgreso && (
                                   <button
                                     type="button"
+                                    className={`mov-iconBtn ${isOtroEgresoPagado(r) ? "is-disabled" : ""}`}
+                                    title={isOtroEgresoPagado(r) ? "Egreso pagado" : "Pagar saldo pendiente"}
+                                    onClick={() => handleOpenPagar(r)}
+                                    disabled={isAnyLoading || loadingListsCtx || isOtroEgresoPagado(r)}
+                                  >
+                                    <FontAwesomeIcon icon={faMoneyBill1Wave} />
+                                  </button>
+                                )}
+
+                                {!esDepositoChequeEgreso && (
+                                  <button
+                                    type="button"
                                     className="mov-iconBtn"
                                     title="Editar"
                                     onClick={() => handleOpenEdit(r)}
@@ -2087,9 +2207,25 @@ export default function OtrosEgresos() {
         }}
       />
 
+      <ModalPagarOtrosEgresos
+        open={openPagar}
+        row={selectedRow}
+        lists={lists}
+        onClose={handleClosePagar}
+        onToast={showToast}
+        onOpenDetalle={handleOpenMediosPago}
+        detalleEgresoOpen={openMediosPago}
+        onSaved={async () => {
+          setOpenPagar(false);
+          setSelectedRow(null);
+          await reloadVista();
+          await refreshPeriodos();
+        }}
+      />
+
       <ModalDetalleMovimientoEgreso
         open={openMediosPago}
-        row={selectedRow}
+        row={selectedMediosRow}
         onClose={handleCloseMediosPago}
       />
 

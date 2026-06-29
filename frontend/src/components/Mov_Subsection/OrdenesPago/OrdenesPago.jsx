@@ -31,6 +31,7 @@ import {
 import * as XLSX from "xlsx";
 import { useListas } from "../../../context/ListasContext.jsx";
 import { useDateRange } from "../../../context/DateRangeContext.jsx";
+import { getDetalleMovimiento } from "../_shared/detalleMovimiento.js";
 
 /* =========================
    PERF
@@ -55,13 +56,66 @@ function safeText(v) {
   return s ? s : "—";
 }
 function productosLabel(row) {
-  const cantidadDesdeCampo = Number(row?.cantidad_items || 0);
-  const cantidadDesdeItems = Array.isArray(row?.items_detalle) ? row.items_detalle.length : 0;
-  const cantidad = cantidadDesdeCampo > 0 ? cantidadDesdeCampo : cantidadDesdeItems;
+  return getDetalleMovimiento(row);
+}
 
-  if (cantidad <= 0) return "SIN PRODUCTOS";
-  if (cantidad === 1) return "1 PRODUCTO";
-  return `${cantidad} PRODUCTOS`;
+function getMontoTotalRow(row) {
+  const n = Number(row?.monto_total ?? row?.total ?? 0);
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
+function getCobradoTotalRow(row) {
+  const n = Number(
+    row?.cobrado_total ??
+      row?.monto_cobrado ??
+      row?.total_cobrado ??
+      row?.pagado_total ??
+      0
+  );
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
+function getSaldoPendienteRow(row) {
+  const explicitKeys = [
+    "saldo_pendiente",
+    "saldo_restante",
+    "monto_pendiente",
+    "pendiente",
+    "saldo",
+  ];
+
+  for (const key of explicitKeys) {
+    if (row?.[key] !== undefined && row?.[key] !== null && row?.[key] !== "") {
+      const n = Number(row[key]);
+      if (Number.isFinite(n)) return Math.max(0, n);
+    }
+  }
+
+  const total = getMontoTotalRow(row);
+  const cobrado = getCobradoTotalRow(row);
+  if (total > 0 || cobrado > 0) return Math.max(0, total - cobrado);
+  if (row?.pagado === true || Number(row?.pagado ?? 0) === 1) return 0;
+  return total;
+}
+
+function isPagadoRow(row) {
+  return getSaldoPendienteRow(row) <= 0.009;
+}
+
+function isParcialRow(row) {
+  return !isPagadoRow(row) && getCobradoTotalRow(row) > 0.009;
+}
+
+function getEstadoOrdenPagoLabel(row) {
+  if (isPagadoRow(row)) return "PAGADO";
+  if (isParcialRow(row)) return "PENDIENTE PARCIAL";
+  return "PENDIENTE";
+}
+
+function getEstadoOrdenPagoChipClass(row) {
+  if (isPagadoRow(row)) return "mov-chip mov-chip--ok";
+  if (isParcialRow(row)) return "mov-chip mov-chip--warn mov-chip--partial";
+  return "mov-chip mov-chip--warn";
 }
 function normalizeSearchText(v) {
   return String(v ?? "")
@@ -189,7 +243,7 @@ function isCompraCuentaCorriente(row) {
 }
 
 function isPagado(row) {
-  return Number(row?.pagado ?? 0) === 1;
+  return isPagadoRow(row);
 }
 
 /* =========================
@@ -233,8 +287,8 @@ function buildExportRows(rows) {
     FECHA: safeText(formatFechaDMY(r?.fecha)),
     DESCRIPCION: productosLabel(r),
     PROVEEDOR: safeText(r?.proveedor),
-    ESTADO: "PENDIENTE",
-    MONTO: Number(r?.monto_total ?? r?.total ?? 0) || 0,
+    ESTADO: getEstadoOrdenPagoLabel(r),
+    MONTO: getSaldoPendienteRow(r),
   }));
 }
 
@@ -490,7 +544,8 @@ export default function OrdenesPago() {
 
         const norm = rawArr.map((r) => ({
           ...r,
-          pagado: Number(r?.pagado ?? 0) === 1 ? 1 : 0,
+          pagado: isPagadoRow(r) ? 1 : 0,
+          saldo_pendiente: getSaldoPendienteRow(r),
         }));
 
         let newHasMore = data.has_more !== undefined ? !!data.has_more : norm.length > PAGE_SIZE;
@@ -932,6 +987,43 @@ export default function OrdenesPago() {
     } catch {}
   }, [dateRange, loadRows, q, refreshLists]);
 
+  const applyPagoParcialToRows = useCallback((idsMovimiento, info = {}) => {
+    const ids = Array.isArray(idsMovimiento)
+      ? idsMovimiento.map((x) => Number(x || 0)).filter(Boolean)
+      : [Number(idsMovimiento || 0)].filter(Boolean);
+
+    if (!ids.length) return;
+
+    let restante = Number(info?.montoPagado ?? info?.monto_pagado ?? info?.montoCobrado ?? info?.total ?? 0);
+    if (!Number.isFinite(restante) || restante <= 0) return;
+
+    cacheRef.current.clear();
+
+    setRows((prev) => {
+      const next = (Array.isArray(prev) ? prev : []).map((r) => {
+        const idMov = Number(r?.id_movimiento || 0);
+        if (!idMov || !ids.includes(idMov) || restante <= 0) return r;
+
+        const saldoAntes = getSaldoPendienteRow(r);
+        const aplicado = Math.min(saldoAntes, restante);
+        restante = Math.max(0, restante - aplicado);
+
+        const nuevoCobrado = getCobradoTotalRow(r) + aplicado;
+        const nuevoSaldo = Math.max(0, getMontoTotalRow(r) - nuevoCobrado);
+
+        return {
+          ...r,
+          cobrado_total: nuevoCobrado,
+          saldo_pendiente: nuevoSaldo,
+          pagado: nuevoSaldo <= 0.009 ? 1 : 0,
+        };
+      });
+
+      rowsRef.current = next;
+      return next;
+    });
+  }, []);
+
   /* =========================
      Al finalizar/cerrar orden
   ========================= */
@@ -983,9 +1075,12 @@ export default function OrdenesPago() {
         ? payload.medios_pago
         : [];
 
+      const primaryMedioId = mediosPagoPayload[0]?.id_medio_pago || Number(payload?.id_medio_pago || 0);
+
       const data = await apiPostJson(`${API}?action=ordenes_pago_confirmar_pago`, {
         ids_movimiento: ids,
         medios_pago: mediosPagoPayload,
+        id_medio_pago: primaryMedioId,
         fecha_cobro: payload?.fecha_cobro || payload?.fecha_pago || payload?.fecha || todayISO(),
         fecha_pago: payload?.fecha_pago || payload?.fecha_cobro || payload?.fecha || todayISO(),
         fecha: payload?.fecha || payload?.fecha_cobro || payload?.fecha_pago || todayISO(),
@@ -1036,7 +1131,7 @@ export default function OrdenesPago() {
   ========================= */
   const columns = useMemo(
     () => [
-      { key: "fecha", label: "FECHA", align: "center", fr: 1, render: (r) => safeText(formatFechaDMY(r.fecha)) },
+      { key: "fecha", label: "FECHA", align: "center", fr: .9, render: (r) => safeText(formatFechaDMY(r.fecha)) },
       {
         key: "detalle",
         label: "DESCRIPCIÓN",
@@ -1050,10 +1145,10 @@ export default function OrdenesPago() {
         key: "estado",
         label: "ESTADO",
         align: "center",
-        fr: 1,
-        render: () => <span className="mov-chip mov-chip--warn">PENDIENTE</span>,
+        fr: 1.5,
+        render: (r) => <span className={getEstadoOrdenPagoChipClass(r)}>{getEstadoOrdenPagoLabel(r)}</span>,
       },
-      { key: "monto", label: "MONTO", fr: 1.2, align: "right", render: (r) => moneyARS(r.monto_total ?? r.total ?? 0) },
+      { key: "monto", label: "SALDO", fr: 1.2, align: "right", render: (r) => moneyARS(getSaldoPendienteRow(r)) },
       { key: "acciones", label: "ACCIONES", fr: 1, align: "center", render: () => null },
     ],
     []
@@ -1424,6 +1519,7 @@ export default function OrdenesPago() {
         onConfirm={onConfirmPago}
         lists={lists}
         onOrdenPagoFinalizado={onOrdenPagoFinalizado}
+        onAfterPaid={applyPagoParcialToRows}
       />
 
       <ModalEditarOrdenPago

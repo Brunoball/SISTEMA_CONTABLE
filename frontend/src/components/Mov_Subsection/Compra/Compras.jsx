@@ -36,6 +36,7 @@ import * as XLSX from "xlsx";
 import { useListas } from "../../../context/ListasContext.jsx";
 import { useDateRange } from "../../../context/DateRangeContext.jsx";
 import { readMovPerfCache, writeMovPerfCache, clearMovPerfCache } from "../_shared/performanceCache.js";
+import { getDetalleMovimiento } from "../_shared/detalleMovimiento.js";
 
 /* =========================
    PERF: paginado
@@ -94,13 +95,7 @@ function safeText(v) {
   return s ? s : "—";
 }
 function productosLabel(row) {
-  const cantidadDesdeCampo = Number(row?.cantidad_items || 0);
-  const cantidadDesdeItems = Array.isArray(row?.items_detalle) ? row.items_detalle.length : 0;
-  const cantidad = cantidadDesdeCampo > 0 ? cantidadDesdeCampo : cantidadDesdeItems;
-
-  if (cantidad <= 0) return "SIN PRODUCTOS";
-  if (cantidad === 1) return "1 PRODUCTO";
-  return `${cantidad} PRODUCTOS`;
+  return getDetalleMovimiento(row);
 }
 
 function numOrZero(v) {

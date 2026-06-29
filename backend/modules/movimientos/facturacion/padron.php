@@ -152,37 +152,36 @@ if (!function_exists('resolve_current_tenant_id')) {
     {
         $candidates = array();
 
-        // headers típicos
-        $candidates[] = header_value_ci('X-IdTenant');
-        $candidates[] = header_value_ci('X-Id-Tenant');
+        // Fuente segura: sesión master validada por backend/routes/api.php.
+        // NO tomar X-IdTenant del frontend para no permitir elegir otra carpeta ARCA.
+        $candidates[] = $GLOBALS['AUTH_TENANT_ID'] ?? '';
 
-        // superglobales server directas
-        $candidates[] = $_SERVER['HTTP_X_IDTENANT'] ?? '';
-        $candidates[] = $_SERVER['HTTP_X_ID_TENANT'] ?? '';
+        if (isset($GLOBALS['SESSION_MASTER']) && is_array($GLOBALS['SESSION_MASTER'])) {
+            $candidates[] = $GLOBALS['SESSION_MASTER']['idTenant'] ?? '';
+            $candidates[] = $GLOBALS['SESSION_MASTER']['id_tenant'] ?? '';
+            $candidates[] = $GLOBALS['SESSION_MASTER']['tenant_id'] ?? '';
+        }
 
-        // globals por si el router/resolver ya cargó tenant
+        // Globals por si el tenant_resolver ya cargó el tenant.
         if (isset($GLOBALS['tenant']) && is_array($GLOBALS['tenant'])) {
             $candidates[] = $GLOBALS['tenant']['idTenant'] ?? '';
             $candidates[] = $GLOBALS['tenant']['id_tenant'] ?? '';
+            $candidates[] = $GLOBALS['tenant']['tenant_id'] ?? '';
         }
 
         if (isset($GLOBALS['currentTenant']) && is_array($GLOBALS['currentTenant'])) {
             $candidates[] = $GLOBALS['currentTenant']['idTenant'] ?? '';
             $candidates[] = $GLOBALS['currentTenant']['id_tenant'] ?? '';
+            $candidates[] = $GLOBALS['currentTenant']['tenant_id'] ?? '';
         }
 
-        // sesión
+        // Sesión PHP seteada luego de validar X-Session.
         try_start_session_if_needed();
 
         if (isset($_SESSION) && is_array($_SESSION)) {
             $candidates[] = $_SESSION['idTenant'] ?? '';
             $candidates[] = $_SESSION['id_tenant'] ?? '';
             $candidates[] = $_SESSION['tenant_id'] ?? '';
-
-            if (isset($_SESSION['tenant']) && is_array($_SESSION['tenant'])) {
-                $candidates[] = $_SESSION['tenant']['idTenant'] ?? '';
-                $candidates[] = $_SESSION['tenant']['id_tenant'] ?? '';
-            }
         }
 
         foreach ($candidates as $candidate) {
@@ -260,6 +259,106 @@ if (!function_exists('resolve_tenant_secure_dir')) {
     }
 }
 
+
+if (!function_exists('resolve_config_facturacion_emisor_cuit')) {
+    function resolve_config_facturacion_emisor_cuit(?PDO $pdo): string
+    {
+        $idConfig = (int)($_GET['id_config_facturacion'] ?? $_GET['idConfigFacturacion'] ?? 0);
+        $cuit = only_digits($_GET['cuit_emisor'] ?? $_GET['arca_cuit'] ?? $_GET['cuit_config'] ?? '');
+
+        if (!$pdo instanceof PDO) {
+            return strlen($cuit) === 11 ? $cuit : '';
+        }
+
+        $params = array();
+        $whereExtra = '';
+        if ($idConfig > 0) {
+            $whereExtra = ' AND idConfigFacturacion = :idConfig ';
+            $params[':idConfig'] = $idConfig;
+        } elseif (strlen($cuit) === 11) {
+            $whereExtra = ' AND REPLACE(REPLACE(cuit, \'-\', \'\'), \' \', \'\') = :cuit ';
+            $params[':cuit'] = $cuit;
+        }
+
+        $sql = "
+            SELECT cuit
+            FROM config_facturacion
+            WHERE activo = 1
+            {$whereExtra}
+            ORDER BY idConfigFacturacion DESC
+            LIMIT 1
+        ";
+        $st = $pdo->prepare($sql);
+        $st->execute($params);
+        $rowCuit = only_digits((string)($st->fetchColumn() ?: ''));
+
+        if ($rowCuit === '') {
+            if ($idConfig > 0) {
+                throw new RuntimeException('No existe una configuración de facturación activa con ese ID.');
+            }
+            if (strlen($cuit) === 11) {
+                throw new RuntimeException('No existe una configuración de facturación activa para el CUIT emisor seleccionado.');
+            }
+        }
+
+        return strlen($rowCuit) === 11 ? $rowCuit : '';
+    }
+}
+
+if (!function_exists('read_cuit_from_secure_dir')) {
+    function read_cuit_from_secure_dir(string $dir): string
+    {
+        $cuitFile = rtrim($dir, '/\\') . '/arca_cuit.txt';
+        if (is_file($cuitFile)) {
+            $digits = only_digits(trim((string)@file_get_contents($cuitFile)));
+            if (strlen($digits) === 11) {
+                return $digits;
+            }
+        }
+
+        return extract_cuit_from_cert(rtrim($dir, '/\\') . '/arca_cert.pem');
+    }
+}
+
+if (!function_exists('resolve_tenant_account_secure_dir')) {
+    function resolve_tenant_account_secure_dir(int $tenantId, string $cuitEmisor = ''): string
+    {
+        $tenantDir = resolve_tenant_secure_dir($tenantId);
+        $cuitEmisor = only_digits($cuitEmisor);
+
+        if ($cuitEmisor === '') {
+            return $tenantDir;
+        }
+
+        foreach (array($cuitEmisor, 'cuit_' . $cuitEmisor, 'CUIT_' . $cuitEmisor) as $name) {
+            $dir = $tenantDir . '/' . $name;
+            if (is_dir($dir)) {
+                $realTenant = realpath($tenantDir);
+                $realDir = realpath($dir);
+                if ($realTenant === false || $realDir === false) {
+                    continue;
+                }
+                $tenantNorm = rtrim(str_replace('\\', '/', $realTenant), '/') . '/';
+                $dirNorm = rtrim(str_replace('\\', '/', $realDir), '/') . '/';
+                if (strpos($dirNorm, $tenantNorm) !== 0) {
+                    throw new RuntimeException('Ruta privada inválida para la cuenta fiscal.');
+                }
+                return rtrim($realDir, '/\\');
+            }
+        }
+
+        $legacyCuit = read_cuit_from_secure_dir($tenantDir);
+        if ($legacyCuit !== '' && $legacyCuit === $cuitEmisor) {
+            return $tenantDir;
+        }
+
+        throw new RuntimeException(
+            'No existe carpeta privada ARCA para el CUIT emisor ' . $cuitEmisor .
+            '. Creá la carpeta ' . $tenantDir . '/' . $cuitEmisor . ' con los certificados y WSDL correspondientes.'
+        );
+    }
+}
+
 /* =========================================================
    Key / cert helpers
 ========================================================= */
@@ -292,16 +391,21 @@ if (!function_exists('key_is_encrypted')) {
 if (!function_exists('load_key_pass')) {
     function load_key_pass(string $secureDir, string $keyPath): string
     {
-        $env = getenv('ARCA_KEY_PASS');
-        if ($env !== false && trim((string)$env) !== '') {
-            return trim((string)$env);
-        }
-
+        // Multi-tenant: la pass debe estar dentro de la carpeta privada del tenant.
         $passFile = $secureDir . '/arca_key.pass';
         if (is_file($passFile)) {
             $txt = trim((string)@file_get_contents($passFile));
             if ($txt !== '') {
                 return $txt;
+            }
+        }
+
+        // Fallback global solo si se habilita explícitamente para pruebas/local.
+        $allowGlobalArcaEnv = (string)(getenv('BALTO_ALLOW_GLOBAL_ARCA_ENV') ?: '');
+        if ($allowGlobalArcaEnv === '1') {
+            $env = getenv('ARCA_KEY_PASS');
+            if ($env !== false && trim((string)$env) !== '') {
+                return trim((string)$env);
             }
         }
 
@@ -448,15 +552,16 @@ require_once $base . '/arca_wsaa.php';
 $tenantId = resolve_current_tenant_id();
 if ($tenantId <= 0) {
     json_error(
-        'No se pudo resolver el tenant actual. Enviá X-IdTenant o asegurate de tener la sesión cargada.',
+        'No se pudo resolver el tenant actual desde la sesión validada.',
         401
     );
 }
 
 try {
-    $secureDir = resolve_tenant_secure_dir($tenantId);
+    $cuitEmisorSeleccionado = resolve_config_facturacion_emisor_cuit($pdo ?? null);
+    $secureDir = resolve_tenant_account_secure_dir($tenantId, $cuitEmisorSeleccionado);
 } catch (Throwable $e) {
-    json_error('Error resolviendo carpeta privada del tenant.', 500, array(
+    json_error('Error resolviendo carpeta privada de ARCA.', 500, array(
         'tenant_id' => $tenantId,
         'detalle'   => $e->getMessage(),
     ));
@@ -488,9 +593,14 @@ if (!empty($faltantes)) {
 $cuitRepresentada = extract_cuit_from_cert($certPath);
 
 if (strlen($cuitRepresentada) !== 11) {
-    $envCuit = only_digits((string)(getenv('ARCA_CUIT') ?: ''));
-    if (strlen($envCuit) === 11) {
-        $cuitRepresentada = $envCuit;
+    // Fallback seguro por tenant: balto_private/balto_arca_clientes/t_ID/arca_cuit.txt
+    // No usar ARCA_CUIT global porque podría mezclar CUITs entre clientes.
+    $tenantCuitFile = $secureDir . '/arca_cuit.txt';
+    if (is_file($tenantCuitFile)) {
+        $tenantCuit = only_digits(trim((string)@file_get_contents($tenantCuitFile)));
+        if (strlen($tenantCuit) === 11) {
+            $cuitRepresentada = $tenantCuit;
+        }
     }
 }
 
@@ -498,6 +608,15 @@ if (strlen($cuitRepresentada) !== 11) {
     json_error('No se pudo resolver el CUIT del certificado.', 500, array(
         'tenant_id'  => $tenantId,
         'cert_path'  => $certPath,
+        'secure_dir' => $secureDir,
+    ));
+}
+
+if (!empty($cuitEmisorSeleccionado) && $cuitRepresentada !== $cuitEmisorSeleccionado) {
+    json_error('El CUIT de config_facturacion no coincide con el certificado/carpeta ARCA seleccionada.', 500, array(
+        'tenant_id' => $tenantId,
+        'cuit_config_facturacion' => $cuitEmisorSeleccionado,
+        'cuit_certificado' => $cuitRepresentada,
         'secure_dir' => $secureDir,
     ));
 }

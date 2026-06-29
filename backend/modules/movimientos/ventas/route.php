@@ -7,7 +7,6 @@ require_once __DIR__ . '/listar.php';
 require_once __DIR__ . '/guardar.php';
 require_once __DIR__ . '/fiscal.php';
 require_once __DIR__ . '/eliminar.php';
-require_once __DIR__ . '/cheques.php';
 
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 $action = is_string($action) ? trim($action) : '';
@@ -55,29 +54,15 @@ try {
       facturacion_config_get($pdo);
       break;
 
-    /* =========================
-       CHEQUES DE VENTAS
-    ========================= */
-    case 'ventas_cheques_guardar':
-      ventas_cheques_guardar($pdo);
+
+    case 'ventas_comprobantes_descargar':
+    case 'ventas_comprobantes_vincular_movimiento':
+    case 'ventas_comprobantes_vincular_movimientos_lote':
+    case 'ventas_comprobantes_eliminar':
+    case 'ventas_eliminar_comprobante':
+      require_once __DIR__ . '/../global/comprobantes.php';
       break;
 
-    case 'ventas_cheques_obtener':
-      ventas_cheques_obtener($pdo);
-      break;
-
-    case 'ventas_cheques_listar':
-      ventas_cheques_listar($pdo);
-      break;
-
-    case 'ventas_cheques_actualizar':
-    case 'ventas_cheques_editar':
-      ventas_cheques_actualizar($pdo);
-      break;
-
-    case 'ventas_cheques_eliminar':
-      ventas_cheques_eliminar($pdo);
-      break;
 
     default:
       fail('Acción no válida en ventas: ' . $action);

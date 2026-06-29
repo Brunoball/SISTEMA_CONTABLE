@@ -202,10 +202,17 @@ final class ArcaWsfev1
         $docTipo    = (int)($comprobante['doc_tipo'] ?? 99);
         $docNroRaw  = preg_replace('/\D+/', '', (string)($comprobante['doc_nro'] ?? 0));
         $docNro     = $docNroRaw === '' ? 0 : (int)$docNroRaw;
-        $fechaCbte  = preg_replace('/\D+/', '', (string)($comprobante['fecha_cbte'] ?? date('Ymd')));
+        $fechaRaw    = $comprobante['fecha_cbte'] ?? $comprobante['fecha_cbte_iso'] ?? null;
+        $fechaCbte  = preg_replace('/\D+/', '', (string)($fechaRaw ?? ''));
 
         if (!preg_match('/^\d{8}$/', $fechaCbte)) {
-            throw new RuntimeException('Fecha de comprobante inválida. Debe ser YYYYMMDD.');
+            throw new RuntimeException('Fecha de comprobante obligatoria. Debe venir desde el modal en formato YYYYMMDD o AAAA-MM-DD.');
+        }
+        $fechaY = (int)substr($fechaCbte, 0, 4);
+        $fechaM = (int)substr($fechaCbte, 4, 2);
+        $fechaD = (int)substr($fechaCbte, 6, 2);
+        if (!checkdate($fechaM, $fechaD, $fechaY)) {
+            throw new RuntimeException('Fecha de comprobante inválida. Debe ser una fecha real.');
         }
 
         $detalle = [

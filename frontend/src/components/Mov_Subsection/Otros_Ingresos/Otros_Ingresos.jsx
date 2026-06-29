@@ -12,6 +12,7 @@ import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 import ModalNuevoIngreso from "./modales/ModalNuevoIngreso.jsx";
 import ModalEditarIngreso from "./modales/ModalEditarIngreso.jsx";
+import ModalCobrarOtrosIngresos from "./modales/ModalCobrarOtrosIngresos.jsx";
 import ModalEliminar from "../../Global/Modales/ModalEliminar.jsx";
 import { ModalDetalleMovimientoIngreso } from "../../Global/Modales/ModalDetalleMovimiento.jsx";
 
@@ -29,12 +30,14 @@ import {
   faBoxOpen,
   faEye,
   faInfoCircle,
+  faMoneyBill1Wave,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
 import { useListas } from "../../../context/ListasContext.jsx";
 import { useDateRange } from "../../../context/DateRangeContext.jsx";
 import { readMovPerfCache, writeMovPerfCache, clearMovPerfCache } from "../_shared/performanceCache.js";
+import { getDetalleMovimiento } from "../_shared/detalleMovimiento.js";
 
 const MIN_LOADING_MS = 0;
 const FORCE_SHOW_LOADER_DEV = false;
@@ -56,13 +59,7 @@ function safeText(v) {
   return s ? s : "—";
 }
 function productosLabel(row) {
-  const cantidadDesdeCampo = Number(row?.cantidad_items || 0);
-  const cantidadDesdeItems = Array.isArray(row?.items_detalle) ? row.items_detalle.length : 0;
-  const cantidad = cantidadDesdeCampo > 0 ? cantidadDesdeCampo : cantidadDesdeItems;
-
-  if (cantidad <= 0) return "SIN PRODUCTOS";
-  if (cantidad === 1) return "1 PRODUCTO";
-  return `${cantidad} PRODUCTOS`;
+  return getDetalleMovimiento(row);
 }
 
 function normalizeSearchText(v) {
@@ -231,6 +228,63 @@ function hasOtroIngresoDetalleMedios(row) {
   return getOtroIngresoCantidadMedios(row) > 1;
 }
 
+function getOtroIngresoTotal(row) {
+  const n = Number(row?.monto_total ?? row?.total ?? row?.total_general ?? 0);
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
+function getOtroIngresoCobrado(row) {
+  const explicit = Number(
+    row?.cobrado_total ?? row?.monto_cobrado ?? row?.total_cobrado ?? row?.pagado_total ?? NaN
+  );
+  if (Number.isFinite(explicit)) return Math.max(0, explicit);
+
+  return getOtroIngresoMediosDetalle(row).reduce((acc, mp) => {
+    const n = Number(mp?.monto ?? mp?.importe ?? 0);
+    return acc + (Number.isFinite(n) ? Math.max(0, n) : 0);
+  }, 0);
+}
+
+function getOtroIngresoSaldo(row) {
+  for (const key of ["saldo_pendiente", "saldo_restante", "monto_pendiente", "pendiente", "saldo"]) {
+    if (row?.[key] !== undefined && row?.[key] !== null && row?.[key] !== "") {
+      const n = Number(row[key]);
+      if (Number.isFinite(n)) return Math.max(0, n);
+    }
+  }
+  return Math.max(0, getOtroIngresoTotal(row) - getOtroIngresoCobrado(row));
+}
+
+function getOtroIngresoEstadoPago(row) {
+  const estado = String(row?.estado_pago ?? row?.estadoPago ?? "").trim().toLowerCase();
+  if (estado) return estado;
+  const total = getOtroIngresoTotal(row);
+  const cobrado = getOtroIngresoCobrado(row);
+  const saldo = getOtroIngresoSaldo(row);
+  if (total <= 0.009 || saldo <= 0.009) return "pagado";
+  if (cobrado > 0.009) return "pendiente_parcial";
+  return "pendiente";
+}
+
+function getOtroIngresoEstadoLabel(row) {
+  const estado = getOtroIngresoEstadoPago(row);
+  if (estado === "pagado" || estado === "cobrado") return "PAGADO";
+  if (estado === "pendiente_parcial" || estado === "parcial") return "PENDIENTE PARCIAL";
+  return "PENDIENTE";
+}
+
+function getOtroIngresoEstadoChipClass(row) {
+  const estado = getOtroIngresoEstadoPago(row);
+  if (estado === "pagado" || estado === "cobrado") return "mov-chip mov-chip--ok";
+  if (estado === "pendiente_parcial" || estado === "parcial") return "mov-chip mov-chip--warn mov-chip--partial";
+  return "mov-chip mov-chip--warn";
+}
+
+function isOtroIngresoPagado(row) {
+  return getOtroIngresoSaldo(row) <= 0.009;
+}
+
+
 function normalizeOtroIngresoRow(r) {
   return {
     ...r,
@@ -243,6 +297,10 @@ function normalizeOtroIngresoRow(r) {
     comprobante_tipo: String(r?.comprobante_tipo ?? "").trim(),
     medios_pago_detalle: getOtroIngresoMediosDetalle(r),
     cantidad_medios_pago: getOtroIngresoCantidadMedios(r),
+    cobrado_total: getOtroIngresoCobrado(r),
+    saldo_pendiente: getOtroIngresoSaldo(r),
+    estado_pago: getOtroIngresoEstadoPago(r),
+    pagado: isOtroIngresoPagado(r),
     tiene_comprobante:
       Number(r?.id_comprobante ?? 0) > 0 || String(r?.comprobante_url ?? "").trim() !== "",
   };
@@ -304,6 +362,9 @@ function buildExportRows(rows) {
     FECHA: safeText(formatFechaDMY(r?.fecha)),
     DESCRIPCION: productosLabel(r),
     TOTAL: Number(r?.monto_total ?? r?.total ?? r?.total_general ?? 0) || 0,
+    COBRADO: getOtroIngresoCobrado(r),
+    SALDO: getOtroIngresoSaldo(r),
+    ESTADO: getOtroIngresoEstadoLabel(r),
   }));
 }
 
@@ -358,6 +419,7 @@ export default function OtrosIngresos() {
 
   const [openAdd, setOpenAdd] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
+  const [openCobrar, setOpenCobrar] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
 
   const [openDelete, setOpenDelete] = useState(false);
@@ -775,7 +837,7 @@ export default function OtrosIngresos() {
       {
         key: "total",
         label: "TOTAL",
-        fr: 1.1,
+        fr: 1.05,
         align: "right",
         render: (r) => (
           <span className="fc-num fc-in">
@@ -783,7 +845,25 @@ export default function OtrosIngresos() {
           </span>
         ),
       },
-      { key: "acciones", label: "ACCIONES", fr: 1.2, align: "center", render: () => null },
+      {
+        key: "saldo_pendiente",
+        label: "SALDO",
+        fr: 1.05,
+        align: "right",
+        render: (r) => <span className="fc-num">{moneyARS(getOtroIngresoSaldo(r))}</span>,
+      },
+      {
+        key: "estado_pago",
+        label: "ESTADO",
+        fr: 1.15,
+        align: "center",
+        render: (r) => (
+          <span className={getOtroIngresoEstadoChipClass(r)}>
+            {getOtroIngresoEstadoLabel(r)}
+          </span>
+        ),
+      },
+      { key: "acciones", label: "ACCIONES", fr: 1.5, align: "center", render: () => null },
     ];
   }, []);
 
@@ -1136,6 +1216,29 @@ export default function OtrosIngresos() {
   const handleCloseMediosPago = useCallback(() => {
     setOpenMediosPago(false);
     setSelectedMediosRow(null);
+  }, []);
+
+  const handleOpenCobrar = useCallback((row) => {
+    const normalized = normalizeOtroIngresoRow(row || {});
+    const id = getMovimientoId(normalized);
+
+    if (!id) {
+      showToast("error", "No se encontró el ID del ingreso para cobrar.", 3200);
+      return;
+    }
+
+    if (isOtroIngresoPagado(normalized)) {
+      showToast("advertencia", "Este ingreso ya está cobrado completamente.", 2800);
+      return;
+    }
+
+    setSelectedRow({ ...normalized, id_movimiento: id });
+    setOpenCobrar(true);
+  }, [showToast]);
+
+  const handleCloseCobrar = useCallback(() => {
+    setOpenCobrar(false);
+    setSelectedRow(null);
   }, []);
 
   const handlePrewarmComprobante = useCallback(
@@ -1507,6 +1610,16 @@ export default function OtrosIngresos() {
 
                                 <button
                                   type="button"
+                                  className={`mov-iconBtn ${isOtroIngresoPagado(r) ? "is-disabled" : ""}`}
+                                  title={isOtroIngresoPagado(r) ? "Ingreso cobrado" : "Cobrar saldo pendiente"}
+                                  onClick={() => handleOpenCobrar(r)}
+                                  disabled={isAnyLoading || loadingListsCtx || isOtroIngresoPagado(r)}
+                                >
+                                  <FontAwesomeIcon icon={faMoneyBill1Wave} />
+                                </button>
+
+                                <button
+                                  type="button"
                                   className="mov-iconBtn"
                                   title="Editar"
                                   onClick={() => handleOpenEdit(r)}
@@ -1634,6 +1747,22 @@ export default function OtrosIngresos() {
           await reloadVista();
           await refreshPeriodos();
           showToast("exito", "Ingreso actualizado correctamente.", 2600);
+        }}
+      />
+
+      <ModalCobrarOtrosIngresos
+        open={openCobrar}
+        row={selectedRow}
+        lists={lists}
+        onClose={handleCloseCobrar}
+        onToast={showToast}
+        onOpenDetalle={handleOpenMediosPago}
+        detalleIngresoOpen={openMediosPago}
+        onSaved={async () => {
+          setOpenCobrar(false);
+          setSelectedRow(null);
+          await reloadVista();
+          await refreshPeriodos();
         }}
       />
 

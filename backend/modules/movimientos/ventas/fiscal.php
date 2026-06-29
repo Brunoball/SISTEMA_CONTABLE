@@ -43,12 +43,12 @@ function obtener_estado_fiscal_venta(PDO $pdo, int $idMovimiento): array {
 
   if (!$row) {
     return [
-      'tiene_factura' => false,
+      'tiene_factura'         => false,
       'id_comprobante_original' => null,
-      'emitido_en_arca' => false,
-      'tiene_nota_credito' => false,
+      'emitido_en_arca'       => false,
+      'tiene_nota_credito'    => false,
       'requiere_nota_credito' => false,
-      'factura' => null,
+      'factura'               => null,
     ];
   }
 
@@ -56,16 +56,39 @@ function obtener_estado_fiscal_venta(PDO $pdo, int $idMovimiento): array {
   $tieneNC = ((int)($row['tiene_nota_credito'] ?? 0) === 1);
 
   return [
-    'tiene_factura' => true,
+    'tiene_factura'         => true,
     'id_comprobante_original' => (int)$row['id_comprobante_original'],
-    'emitido_en_arca' => $emitido,
-    'tiene_nota_credito' => $tieneNC,
+    'emitido_en_arca'       => $emitido,
+    'tiene_nota_credito'    => $tieneNC,
     'requiere_nota_credito' => ($emitido && !$tieneNC),
-    'factura' => $row,
+    'factura'               => $row,
   ];
 }
 
-function get_config_facturacion_activa(PDO $pdo): array {
+function cfg_facturacion_digits($v): string {
+  $out = preg_replace('/\D+/', '', (string)$v);
+  return $out ?? '';
+}
+
+function normalizar_config_facturacion_row(array $row): array {
+  // Alias normalizados para que todos los PDFs y WSFE lean siempre los datos
+  // del emisor desde config_facturacion, aunque cada builder use nombres distintos.
+  $row['id_config_facturacion'] = (int)($row['idConfigFacturacion'] ?? $row['id_config_facturacion'] ?? 0);
+  $row['idConfigFacturacion'] = (int)$row['id_config_facturacion'];
+  $row['cuit'] = cfg_facturacion_digits($row['cuit'] ?? '');
+  $row['domicilio'] = $row['domicilio_comercial'] ?? '';
+  $row['domicilio_fiscal'] = $row['domicilio_comercial'] ?? '';
+  $row['inicio_actividades'] = $row['fecha_inicio_actividades'] ?? null;
+  $row['emisor_nombre'] = $row['razon_social'] ?: ($row['nombre_fantasia'] ?? '');
+  $row['emisor_domicilio'] = $row['domicilio_comercial'] ?? '';
+  $row['cuit_emisor'] = $row['cuit'] ?? '';
+  $row['cond_iva_emisor'] = $row['condicion_iva'] ?? '';
+  $row['ingresos_brutos_emisor'] = $row['ingresos_brutos'] ?? '';
+  $row['fecha_inicio_actividades_emisor'] = $row['fecha_inicio_actividades'] ?? null;
+  return $row;
+}
+
+function get_config_facturacion_activas(PDO $pdo): array {
   $sql = "
     SELECT
       idConfigFacturacion,
@@ -79,20 +102,139 @@ function get_config_facturacion_activa(PDO $pdo): array {
       punto_venta,
       tipo_comprobante_default,
       codigo_comprobante,
-      email_facturacion,
-      telefono_facturacion,
-      sitio_web,
-      logo_url,
       activo
     FROM config_facturacion
     WHERE activo = 1
+    ORDER BY idConfigFacturacion ASC
+  ";
+  $st = $pdo->query($sql);
+  $rows = $st ? ($st->fetchAll(PDO::FETCH_ASSOC) ?: []) : [];
+  return array_map('normalizar_config_facturacion_row', $rows);
+}
+
+function get_config_facturacion_activa(PDO $pdo, ?int $idConfig = null, ?string $cuit = null): array {
+  $cuit = cfg_facturacion_digits($cuit ?? '');
+  $params = [];
+  $whereExtra = '';
+
+  if ($idConfig !== null && $idConfig > 0) {
+    $whereExtra = ' AND idConfigFacturacion = :idConfig ';
+    $params[':idConfig'] = $idConfig;
+  } elseif ($cuit !== '') {
+    $whereExtra = ' AND REPLACE(REPLACE(cuit, \'-\', \'\'), \' \', \'\') = :cuit ';
+    $params[':cuit'] = $cuit;
+  }
+
+  $sql = "
+    SELECT
+      idConfigFacturacion,
+      razon_social,
+      nombre_fantasia,
+      cuit,
+      ingresos_brutos,
+      condicion_iva,
+      domicilio_comercial,
+      fecha_inicio_actividades,
+      punto_venta,
+      tipo_comprobante_default,
+      codigo_comprobante,
+      activo
+    FROM config_facturacion
+    WHERE activo = 1
+    {$whereExtra}
     ORDER BY idConfigFacturacion DESC
     LIMIT 1
   ";
-  $st = $pdo->query($sql);
-  $row = $st ? $st->fetch(PDO::FETCH_ASSOC) : false;
-  if (!$row) fail('No hay configuración de facturación activa.');
-  return $row;
+
+  $st = $pdo->prepare($sql);
+  $st->execute($params);
+  $row = $st->fetch(PDO::FETCH_ASSOC);
+
+  if (!$row) {
+    if ($idConfig !== null && $idConfig > 0) {
+      fail('No existe una configuración de facturación activa con ese ID.');
+    }
+    if ($cuit !== '') {
+      fail('No existe una configuración de facturación activa para el CUIT emisor seleccionado.');
+    }
+    fail('No hay configuración de facturación activa.');
+  }
+
+  return normalizar_config_facturacion_row($row);
+}
+
+function extract_config_facturacion_from_json_arca(array $jsonArca): array {
+  $candidates = [
+    $jsonArca['config_facturacion'] ?? null,
+    $jsonArca['emisor'] ?? null,
+    $jsonArca['meta_original_frontend']['config_facturacion'] ?? null,
+    $jsonArca['meta_original_frontend']['resumen_facturacion']['config_facturacion'] ?? null,
+    $jsonArca['meta_original_frontend']['resumen_facturacion']['raw'] ?? null,
+  ];
+
+  foreach ($candidates as $candidate) {
+    if (is_array($candidate) && !empty($candidate)) {
+      return $candidate;
+    }
+  }
+
+  return [];
+}
+
+function extract_cuit_emisor_real_arca(array $jsonArca): string {
+  // La fuente de verdad para saber QUIÉN emitió realmente es ARCA/QR,
+  // no el resumen del frontend. En algunos registros viejos el resumen quedó
+  // con la config fiscal equivocada, pero la respuesta de ARCA y el QR tienen
+  // el CUIT real que autorizó el CAE.
+  $candidates = [
+    $jsonArca['respuesta_arca']['cab']['Cuit'] ?? '',
+    $jsonArca['qr']['qr_payload']['cuit'] ?? '',
+    $jsonArca['meta_original_frontend']['json_arca']['cab']['Cuit'] ?? '',
+    $jsonArca['meta_original_frontend']['qr_payload']['cuit'] ?? '',
+    $jsonArca['meta_original_frontend']['factura']['cuit_emisor'] ?? '',
+    $jsonArca['meta_original_frontend']['cuit_emisor'] ?? '',
+    $jsonArca['cuit_emisor'] ?? '',
+  ];
+
+  foreach ($candidates as $candidate) {
+    $digits = cfg_facturacion_digits($candidate);
+    if (strlen($digits) === 11) {
+      return $digits;
+    }
+  }
+
+  return '';
+}
+
+function extract_cuit_emisor_from_json_arca(array $jsonArca): string {
+  $real = extract_cuit_emisor_real_arca($jsonArca);
+  if ($real !== '') {
+    return $real;
+  }
+
+  // Fallback solamente si el comprobante viejo no guardó respuesta ARCA/QR.
+  $cfg = extract_config_facturacion_from_json_arca($jsonArca);
+  $candidates = [
+    $cfg['cuit'] ?? '',
+    $cfg['cuit_emisor'] ?? '',
+    $jsonArca['emisor']['cuit'] ?? '',
+    $jsonArca['meta_original_frontend']['resumen_facturacion']['cuit_emisor'] ?? '',
+  ];
+
+  foreach ($candidates as $candidate) {
+    $digits = cfg_facturacion_digits($candidate);
+    if (strlen($digits) === 11) {
+      return $digits;
+    }
+  }
+
+  return '';
+}
+
+function extract_id_config_facturacion_from_json_arca(array $jsonArca): ?int {
+  $cfg = extract_config_facturacion_from_json_arca($jsonArca);
+  $id = (int)($cfg['idConfigFacturacion'] ?? $cfg['id_config_facturacion'] ?? 0);
+  return $id > 0 ? $id : null;
 }
 
 /* =========================================================
@@ -129,7 +271,6 @@ function ventas_nota_credito_contexto(PDO $pdo): void {
     fail('La venta ya tiene una nota de crédito vinculada.');
   }
 
-  $cfg = get_config_facturacion_activa($pdo);
   $factura = $estadoFiscal['factura'];
   $cbteTipoNC = map_factura_to_nc_cbte_tipo((int)($factura['cbte_tipo'] ?? 0));
 
@@ -150,6 +291,17 @@ function ventas_nota_credito_contexto(PDO $pdo): void {
     $tmp = json_decode((string)$fiscalRow['json_arca'], true);
     if (is_array($tmp)) $jsonArca = $tmp;
   }
+
+  // IMPORTANTE multi CUIT:
+  // La nota de crédito debe salir por la MISMA cuenta fiscal que emitió
+  // la factura original. Para eso la fuente de verdad es el CUIT autorizado
+  // por ARCA en respuesta_arca.cab.Cuit / qr_payload.cuit.
+  // No usamos primero id_config_facturacion porque puede venir de un resumen
+  // viejo del frontend y quedar desfasado.
+  $cuitEmisorReal = extract_cuit_emisor_from_json_arca($jsonArca);
+  $cfg = $cuitEmisorReal !== ''
+    ? get_config_facturacion_activa($pdo, null, $cuitEmisorReal)
+    : get_config_facturacion_activa($pdo, extract_id_config_facturacion_from_json_arca($jsonArca), null);
 
   $jsonClienteFact = [];
   if (isset($jsonArca['cliente_facturacion']) && is_array($jsonArca['cliente_facturacion'])) {
@@ -206,16 +358,17 @@ function ventas_nota_credito_contexto(PDO $pdo): void {
   $stItems = $pdo->prepare("
     SELECT
       mi.id_item,
-      mi.id_detalle,
+      mi.id_stock_producto,
       mi.cantidad,
       mi.precio,
       mi.iva_pct,
       mi.subtotal,
       mi.iva_monto,
       mi.total,
-      COALESCE(d.nombre, '') AS detalle_nombre
+      COALESCE(sp.nombre, '') AS detalle_nombre
     FROM movimientos_items mi
-    LEFT JOIN detalles d ON d.id_detalle = mi.id_detalle
+    LEFT JOIN stock_productos sp
+      ON sp.id_stock_producto = mi.id_stock_producto
     WHERE mi.id_movimiento = :id
     ORDER BY mi.id_item ASC
   ");
@@ -225,38 +378,38 @@ function ventas_nota_credito_contexto(PDO $pdo): void {
   if ($rowsItems) {
     foreach ($rowsItems as $i => $it) {
       $items[] = [
-        'id' => (int)$it['id_item'],
-        'codigo' => (string)($i + 1),
-        'descripcion' => (string)($it['detalle_nombre'] ?? 'Item'),
-        'cantidad' => (float)($it['cantidad'] ?? 0),
-        'unidad' => 'u',
+        'id'              => (int)$it['id_item'],
+        'codigo'          => (string)($i + 1),
+        'descripcion'     => (string)($it['detalle_nombre'] ?? 'Item'),
+        'cantidad'        => (float)($it['cantidad'] ?? 0),
+        'unidad'          => 'u',
         'precio_unitario' => (float)($it['precio'] ?? 0),
-        'precio' => (float)($it['precio'] ?? 0),
-        'bonif_pct' => 0,
-        'impBonif' => 0,
-        'subtotal' => (float)($it['subtotal'] ?? 0),
-        'ars' => (float)($it['total'] ?? 0),
-        'iva_pct' => (float)($it['iva_pct'] ?? 0),
-        'iva_monto' => (float)($it['iva_monto'] ?? 0),
-        'total' => (float)($it['total'] ?? 0),
+        'precio'          => (float)($it['precio'] ?? 0),
+        'bonif_pct'       => 0,
+        'impBonif'        => 0,
+        'subtotal'        => (float)($it['subtotal'] ?? 0),
+        'ars'             => (float)($it['total'] ?? 0),
+        'iva_pct'         => (float)($it['iva_pct'] ?? 0),
+        'iva_monto'       => (float)($it['iva_monto'] ?? 0),
+        'total'           => (float)($it['total'] ?? 0),
       ];
     }
   } else {
     $items[] = [
-      'id' => 1,
-      'codigo' => '1',
-      'descripcion' => 'Anulación de venta',
-      'cantidad' => 1,
-      'unidad' => 'u',
+      'id'              => 1,
+      'codigo'          => '1',
+      'descripcion'     => 'Anulación de venta',
+      'cantidad'        => 1,
+      'unidad'          => 'u',
       'precio_unitario' => (float)($mov['monto_total'] ?? 0),
-      'precio' => (float)($mov['monto_total'] ?? 0),
-      'bonif_pct' => 0,
-      'impBonif' => 0,
-      'subtotal' => (float)($mov['monto_total'] ?? 0),
-      'ars' => (float)($mov['monto_total'] ?? 0),
-      'iva_pct' => 0,
-      'iva_monto' => 0,
-      'total' => (float)($mov['monto_total'] ?? 0),
+      'precio'          => (float)($mov['monto_total'] ?? 0),
+      'bonif_pct'       => 0,
+      'impBonif'        => 0,
+      'subtotal'        => (float)($mov['monto_total'] ?? 0),
+      'ars'             => (float)($mov['monto_total'] ?? 0),
+      'iva_pct'         => 0,
+      'iva_monto'       => 0,
+      'total'           => (float)($mov['monto_total'] ?? 0),
     ];
   }
 
@@ -293,7 +446,7 @@ function ventas_nota_credito_contexto(PDO $pdo): void {
         'tipo' => (int)($factura['cbte_tipo'] ?? 0),
         'pto_vta' => (int)($factura['pto_vta'] ?? 0),
         'nro' => (int)($factura['cbte_nro'] ?? 0),
-        'cuit' => (string)($cfg['cuit'] ?? ''),
+        'cuit' => (string)($cuitEmisorReal !== '' ? $cuitEmisorReal : ($cfg['cuit'] ?? '')),
         'fecha' => preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)($factura['fecha_cbte'] ?? ''))
           ? str_replace('-', '', (string)$factura['fecha_cbte'])
           : null,
@@ -302,6 +455,11 @@ function ventas_nota_credito_contexto(PDO $pdo): void {
       'items_facturacion' => $items,
       'config_facturacion' => $cfg,
       'json_arca_original' => $jsonArca,
+      'emisor_resuelto_desde_arca' => [
+        'cuit_emisor_real' => $cuitEmisorReal,
+        'id_config_facturacion' => (int)($cfg['id_config_facturacion'] ?? 0),
+        'razon_social' => (string)($cfg['razon_social'] ?? ''),
+      ],
     ]
   ]);
 }
@@ -381,10 +539,20 @@ function ventas_nota_credito_vincular(PDO $pdo): void {
 
 function facturacion_config_get(PDO $pdo): void {
   try {
-    $cfg = get_config_facturacion_activa($pdo);
+    $idConfig = (int)($_GET['id_config_facturacion'] ?? $_GET['idConfigFacturacion'] ?? 0);
+    $cuit = cfg_facturacion_digits($_GET['cuit'] ?? $_GET['cuit_emisor'] ?? $_GET['arca_cuit'] ?? '');
+
+    $configs = get_config_facturacion_activas($pdo);
+    $cfg = get_config_facturacion_activa(
+      $pdo,
+      $idConfig > 0 ? $idConfig : null,
+      $cuit !== '' ? $cuit : null
+    );
+
     echo json_encode([
       'exito' => true,
-      'config' => $cfg
+      'config' => $cfg,
+      'configs' => $configs,
     ], JSON_UNESCAPED_UNICODE);
     exit;
   } catch (Throwable $e) {

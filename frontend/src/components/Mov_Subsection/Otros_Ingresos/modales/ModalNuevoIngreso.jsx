@@ -604,10 +604,10 @@ function PanelMediosPago({
           Asignado: <b>{moneyARS(sumaMediosPago)}</b>
         </span>
         {diferenciaRestante > 0.01 && (
-          <span className="nc-mp-totals-falta">Falta: {moneyARS(diferenciaRestante)}</span>
+          <span className="nc-mp-totals-falta">Pendiente: {moneyARS(diferenciaRestante)}</span>
         )}
         {diferenciaRestante <= 0.01 && sumaMediosPago > 0 && (
-          <span className="nc-mp-totals-ok">✓ Cubierto</span>
+          <span className="nc-mp-totals-ok">✓ Cobro completo</span>
         )}
       </div>
 
@@ -942,7 +942,18 @@ export default function ModalNuevoIngreso({
     
     for (let i = 0; i < mediosFilas.length; i++) {
       const mp = mediosFilas[i];
-      if (!mp.id_medio_pago || mp.id_medio_pago === NULL_OPTION)
+      const tieneMedio = !!mp.id_medio_pago && mp.id_medio_pago !== NULL_OPTION;
+      const montoManual = safeNumber(mp.monto);
+      const montoCheque = safeNumber(mp.cheque?.importe);
+      const tieneMonto = montoManual > 0 || montoCheque > 0;
+      const tieneCheque = !!mp.cheque;
+
+      // Para Otros Ingresos el cobro inicial es opcional:
+      // se puede crear pendiente, parcial o totalmente cobrado.
+      // Si la fila no tiene importe/cheque, se ignora aunque haya quedado un medio seleccionado.
+      if (!tieneMonto && !tieneCheque) continue;
+
+      if (!tieneMedio)
         return { ok: false, msg: `Medio de pago ${i + 1}: falta seleccionar el medio.` };
       const medio = mediosPagoList.find(
         (x) => String(getMedioPagoId(x) ?? "") === String(mp.id_medio_pago)
@@ -954,16 +965,19 @@ export default function ModalNuevoIngreso({
             ok: false,
             msg: `Medio de pago ${i + 1}: debés cargar el ${tipoCheque === "echeq" ? "eCheq" : "cheque"}.`,
           };
-        if (safeNumber(mp.cheque?.importe) <= 0)
+        if (montoCheque <= 0)
           return { ok: false, msg: `Medio de pago ${i + 1}: el importe del cheque es inválido.` };
-      } else if (safeNumber(mp.monto) <= 0) {
+      } else if (montoManual <= 0) {
         return { ok: false, msg: `Medio de pago ${i + 1}: el monto debe ser mayor a 0.` };
       }
     }
-    if (sumaMediosPago < resumen.total - 0.05 && resumen.total > 0)
+
+    // Única validación del cobro inicial: no puede superar el total del ingreso.
+    // No se exige que cubra el total, porque el saldo puede quedar pendiente.
+    if (sumaMediosPago > resumen.total + 0.05 && resumen.total > 0)
       return {
         ok: false,
-        msg: `La suma de los medios de pago (${moneyARS(sumaMediosPago)}) no cubre el total del ingreso (${moneyARS(resumen.total)}).`,
+        msg: `La suma de los medios de pago (${moneyARS(sumaMediosPago)}) no puede superar el total del ingreso (${moneyARS(resumen.total)}).`,
       };
 
     const problems = [];
@@ -1022,12 +1036,14 @@ export default function ModalNuevoIngreso({
     const subtotalFinal = usableRows.reduce((acc, x) => acc + safeNumber(x.subtotal), 0);
     const ivaFinal = usableRows.reduce((acc, x) => acc + safeNumber(x.ivaMonto), 0);
     const totalFinal = usableRows.reduce((acc, x) => acc + safeNumber(x.total), 0);
-    const mediosPayload = mediosFilas.map((mp, index) => ({
-      id_medio_pago: Number(mp.id_medio_pago),
-      monto: safeNumber(mp.cheque?.importe ?? mp.monto),
-      cheque_tipo: mp.cheque?.tipo || null,
-      original_index: index,
-    }));
+    const mediosPayload = mediosFilas
+      .filter((mp) => Number(mp.id_medio_pago || 0) > 0 && safeNumber(mp.cheque?.importe ?? mp.monto) > 0)
+      .map((mp, index) => ({
+        id_medio_pago: Number(mp.id_medio_pago),
+        monto: safeNumber(mp.cheque?.importe ?? mp.monto),
+        cheque_tipo: mp.cheque?.tipo || null,
+        original_index: index,
+      }));
     return {
       fecha: safeStr(fecha).slice(0, 10),
       id_medio_pago: mediosPayload[0]?.id_medio_pago || null,

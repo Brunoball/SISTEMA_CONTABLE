@@ -22,6 +22,7 @@ import ModalReciboGenerado from "./ModalReciboGenerado";
 import ModalNuevoCheque from "../../../Global/Modales/ModalNuevoCheque.jsx";
 import ModalDetalleMovimiento from "../../../Global/Modales/ModalDetalleMovimiento.jsx";
 import { buildReciboHTML } from "../../../../utils/reciboTemplate";
+import { getDetalleMovimiento } from "../../_shared/detalleMovimiento.js";
 
 const API_CHECK_NUMERO_CHEQUE = `${BASE_URL}/api.php?action=mov_global_cheques_obtener&modo=verificar_numero`;
 const API_CHEQUES_ACTUALIZAR = `${BASE_URL}/api.php?action=mov_global_cheques_actualizar`;
@@ -44,13 +45,7 @@ function safeText(v) {
 }
 
 function productosLabel(row) {
-  const cantidadDesdeCampo = Number(row?.cantidad_items || 0);
-  const cantidadDesdeItems = Array.isArray(row?.items_detalle) ? row.items_detalle.length : 0;
-  const cantidad = cantidadDesdeCampo > 0 ? cantidadDesdeCampo : cantidadDesdeItems;
-
-  if (cantidad <= 0) return "1 CONCEPTO";
-  if (cantidad === 1) return "1 PRODUCTO";
-  return `${cantidad} PRODUCTOS`;
+  return getDetalleMovimiento(row);
 }
 
 function formatFechaDMY(v) {
@@ -116,11 +111,48 @@ function normalizeMediosPago(raw) {
     .filter((x) => x.id > 0 && x.nombre);
 }
 
+function getMontoTotalRow(row) {
+  const n = Number(row?.monto_total ?? row?.total ?? 0);
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
+function getCobradoTotalRow(row) {
+  const n = Number(
+    row?.cobrado_total ??
+      row?.monto_cobrado ??
+      row?.total_cobrado ??
+      row?.pagado_total ??
+      0
+  );
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
+function getSaldoPendienteRow(row) {
+  const explicitKeys = [
+    "saldo_pendiente",
+    "saldo_restante",
+    "monto_pendiente",
+    "pendiente",
+    "saldo",
+  ];
+
+  for (const key of explicitKeys) {
+    if (row?.[key] !== undefined && row?.[key] !== null && row?.[key] !== "") {
+      const n = Number(row[key]);
+      if (Number.isFinite(n)) return Math.max(0, n);
+    }
+  }
+
+  const total = getMontoTotalRow(row);
+  const cobrado = getCobradoTotalRow(row);
+
+  if (total > 0 || cobrado > 0) return Math.max(0, total - cobrado);
+  if (row?.pagado === true) return 0;
+  return total;
+}
+
 function isPagadoRow(row) {
-  if (row?.pagado === true) return true;
-  const cob = Number(row?.cobrado_total ?? 0);
-  if (Number.isFinite(cob) && cob > 0.00001) return true;
-  return false;
+  return getSaldoPendienteRow(row) <= 0.009;
 }
 
 function normalizeText(s) {
@@ -266,10 +298,11 @@ function buildEmptyMedioPago() {
 /* =========================
    Sub-componentes UI
 ========================= */
-function EstadoChip({ pagado }) {
+function EstadoChip({ row, pagado }) {
+  const parcial = !pagado && getCobradoTotalRow(row) > 0.009;
   return (
     <span className={`mpr-chip ${pagado ? "mpr-chip--ok" : "mpr-chip--warn"}`}>
-      {pagado ? "PAGADO" : "PENDIENTE"}
+      {pagado ? "PAGADO" : parcial ? "PENDIENTE PARCIAL" : "PENDIENTE"}
     </span>
   );
 }
@@ -623,11 +656,11 @@ function PanelMediosPagoReciboLocal({
         </span>
         {diferenciaReal > 0.01 && (
           <span className="nc-mp-totals-falta">
-            Falta: {moneyARS(diferenciaReal)}
+            Saldo sin cubrir: {moneyARS(diferenciaReal)}
           </span>
         )}
         {diferenciaReal <= 0.01 && totalSeleccionado > 0 && (
-          <span className="nc-mp-totals-ok">✓ Cubierto</span>
+          <span className="nc-mp-totals-ok">✓ Saldo cubierto</span>
         )}
       </div>
 
@@ -861,8 +894,7 @@ export default function ModalPagarRecibos({
     for (const r of deudasOrdenadas) {
       const id = Number(r?.id_movimiento || 0);
       if (!id) continue;
-      if (selectedIds.has(id))
-        sum += Number(r?.monto_total ?? r?.total ?? 0) || 0;
+      if (selectedIds.has(id)) sum += getSaldoPendienteRow(r);
     }
     return sum;
   }, [deudasOrdenadas, selectedIds]);
@@ -1097,15 +1129,19 @@ export default function ModalPagarRecibos({
       }
     }
 
-    if (
-      sumaMediosPago < totalSeleccionado - 0.05 &&
-      totalSeleccionado > 0
-    ) {
+    if (sumaMediosPago <= 0.009) {
+      return {
+        ok: false,
+        msg: "El importe a pagar debe ser mayor a 0.",
+      };
+    }
+
+    if (totalSeleccionado > 0 && sumaMediosPago > totalSeleccionado + 0.05) {
       return {
         ok: false,
         msg: `La suma de los medios de pago (${moneyARS(
           sumaMediosPago
-        )}) no cubre el total a cobrar (${moneyARS(totalSeleccionado)}).`,
+        )}) no puede superar el saldo adeudado (${moneyARS(totalSeleccionado)}).`,
       };
     }
 
@@ -1155,13 +1191,21 @@ export default function ModalPagarRecibos({
      Construir recibo HTML
   ========================= */
   const buildReciboFromSeleccion = useCallback(
-    ({ clienteInfo, mpNombre, seleccion }) => {
-      const items = seleccion.map((r) => ({
-        id_movimiento: r?.id_movimiento,
-        fecha: r?.fecha,
-        descripcion: r?.detalle ?? r?.descripcion ?? r?.concepto,
-        monto: Number(r?.monto_total ?? r?.total ?? 0) || 0,
-      }));
+    ({ clienteInfo, mpNombre, seleccion, montoCobrado }) => {
+      let restante = Math.max(0, safeNumber(montoCobrado));
+      const items = seleccion
+        .map((r) => {
+          const saldo = getSaldoPendienteRow(r);
+          const aplicado = Math.min(saldo, restante);
+          restante = Math.max(0, restante - aplicado);
+          return {
+            id_movimiento: r?.id_movimiento,
+            fecha: r?.fecha,
+            descripcion: r?.detalle ?? r?.descripcion ?? r?.concepto,
+            monto: aplicado,
+          };
+        })
+        .filter((it) => Number(it.monto || 0) > 0.009);
       const total = items.reduce(
         (acc, it) => acc + (Number(it.monto) || 0),
         0
@@ -1362,20 +1406,33 @@ export default function ModalPagarRecibos({
         Number(idsCobroResp?.[0] || resp?.id_cobro || 0) || null
       );
 
+      let restantePagoLocal = Math.max(0, safeNumber(sumaMediosPago));
       setRows((prev) =>
         (Array.isArray(prev) ? prev : []).map((r) => {
           const id = Number(r?.id_movimiento || 0);
           if (!id || !ids.includes(id)) return r;
+
+          const saldoAntes = getSaldoPendienteRow(r);
+          const aplicado = Math.min(saldoAntes, restantePagoLocal);
+          restantePagoLocal = Math.max(0, restantePagoLocal - aplicado);
+
+          const nuevoCobrado = getCobradoTotalRow(r) + aplicado;
+          const nuevoSaldo = Math.max(0, getMontoTotalRow(r) - nuevoCobrado);
+
           return {
             ...r,
-            cobrado_total:
-              Number(r?.monto_total ?? r?.total ?? 0) || 0,
-            pagado: true,
+            cobrado_total: nuevoCobrado,
+            saldo_pendiente: nuevoSaldo,
+            pagado: nuevoSaldo <= 0.009,
           };
         })
       );
 
-      onAfterPaid?.(ids, { nombre: mpNombre });
+      onAfterPaid?.(ids, {
+        nombre: mpNombre,
+        seleccion,
+        montoCobrado: sumaMediosPago,
+      });
 
       const built = buildReciboFromSeleccion({
         clienteInfo: {
@@ -1384,6 +1441,7 @@ export default function ModalPagarRecibos({
         },
         mpNombre,
         seleccion,
+        montoCobrado: sumaMediosPago,
       });
 
       setReciboHtml(built.html);
@@ -1565,8 +1623,8 @@ export default function ModalPagarRecibos({
                       const id = Number(r?.id_movimiento || 0);
                       const pagado = isPagadoRow(r);
                       const checked = selectedIds.has(id);
-                      const monto =
-                        Number(r?.monto_total ?? r?.total ?? 0) || 0;
+                      const monto = getMontoTotalRow(r);
+                      const saldoPendiente = getSaldoPendienteRow(r);
 
                       return (
                         <div
@@ -1615,10 +1673,10 @@ export default function ModalPagarRecibos({
                             {productosLabel(r)}
                           </div>
                           <div className="mpr-td mpr-td--center">
-                            <EstadoChip pagado={pagado} />
+                            <EstadoChip row={r} pagado={pagado} />
                           </div>
                           <div className="mpr-td mpr-td--right mpr-td--mono">
-                            {moneyARS(monto)}
+                            {moneyARS(saldoPendiente)}
                           </div>
                           <div className="mpr-td mpr-td--info" onClick={(e) => e.stopPropagation()}>
                             <button
@@ -1648,7 +1706,7 @@ export default function ModalPagarRecibos({
                     </div>
                     <div className="mpr-tfoot-totals">
                       <div className="mpr-total-pill">
-                        <span>Total seleccionado</span>
+                        <span>Saldo seleccionado</span>
                         <b>{moneyARS(totalSeleccionado)}</b>
                       </div>
                     </div>

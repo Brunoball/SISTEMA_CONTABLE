@@ -58,9 +58,14 @@ function sameDay(a, b) {
   );
 }
 
+function sameMaybeDay(a, b) {
+  if (!a && !b) return true;
+  return sameDay(a, b);
+}
+
 function sameRange(a, b) {
   if (!a || !b) return false;
-  return sameDay(a.from, b.from) && sameDay(a.to, b.to);
+  return sameMaybeDay(a.from, b.from) && sameMaybeDay(a.to, b.to);
 }
 
 // ─── helpers de rango ────────────────────────────────────────────────────────
@@ -109,27 +114,22 @@ function normalizeConfig(config) {
 }
 
 /**
- * Sanitiza cualquier rango que venga de una vista.
+ * Normaliza cualquier rango que venga de una vista.
  *
- * Esto es lo importante:
- * si el modo es "dias_atras", ninguna sección puede pisar el rango global
- * con una fecha vieja guardada en localStorage/sessionStorage.
+ * La configuración del calendario define SOLO el rango inicial al entrar al panel
+ * o al guardar una nueva configuración. Después, si el usuario elige otro
+ * período, ese rango se respeta y no se pisa automáticamente.
  */
 function sanitizeRangeForConfig(range, config) {
   const cfg = normalizeConfig(config);
-
-  if (cfg.modo === "dias_atras") {
-    return rangoDiasAtras(cfg.dias_atras);
-  }
-
   const from = startOfDay(range?.from);
-  const to = endOfDay(range?.to);
+  const to = range?.to ? endOfDay(range.to) : null;
 
-  if (!from || !to) {
+  if (!from && !to) {
     return buildRangeFromConfig(cfg);
   }
 
-  if (from > to) {
+  if (from && to && from > to) {
     return {
       from: startOfDay(to),
       to: endOfDay(from),
@@ -227,17 +227,12 @@ export function DateRangeProvider({ children }) {
   const userTouchedRange = useRef(false);
   const lastConfigSignature = useRef(getConfigSignature(init.calendarConfig));
 
-  // ── maxDate: hoy si el modo es dias_atras, null si es mes_completo ───────
+  // ── maxDate: solo queda disponible para usos explícitos.
+  // La configuración NO debe bloquear rangos elegidos manualmente. ───────────
 
-  const maxDate = useMemo(() => {
-    if (calendarConfig?.modo === "dias_atras") {
-      return endOfDay(new Date());
-    }
+  const maxDate = null;
 
-    return null;
-  }, [calendarConfig?.modo]);
-
-  // ── rango permitido por configuración ─────────────────────────────────────
+  // ── rango inicial sugerido por configuración ──────────────────────────────
 
   const enforcedRange = useMemo(() => {
     return buildRangeFromConfig(calendarConfig);
@@ -292,20 +287,16 @@ export function DateRangeProvider({ children }) {
           });
 
           const nextSignature = getConfigSignature(cfg);
-          const previousSignature = lastConfigSignature.current;
-          const configChanged = nextSignature !== previousSignature;
 
           saveLocalCachedConfig(cfg);
           setCalendarConfig(cfg);
           lastConfigSignature.current = nextSignature;
 
           /**
-           * Si la configuración cambió, se fuerza el rango global.
-           * Si no cambió, también se fuerza cuando el modo es dias_atras,
-           * porque ese modo no debe permitir rangos viejos guardados por vistas.
+           * La configuración se aplica como rango inicial únicamente mientras
+           * el usuario no haya elegido manualmente otro período.
            */
-          if (configChanged || cfg.modo === "dias_atras" || !userTouchedRange.current) {
-            userTouchedRange.current = false;
+          if (!userTouchedRange.current) {
             setDateRangeState(buildRangeFromConfig(cfg));
           }
         }
@@ -323,37 +314,14 @@ export function DateRangeProvider({ children }) {
     };
   }, []);
 
-  // ── protección final: si el modo es dias_atras, el rango jamás queda viejo ─
-
-  useEffect(() => {
-    if (calendarConfig?.modo !== "dias_atras") return;
-
-    setDateRangeState((prev) => {
-      const fixed = buildRangeFromConfig(calendarConfig);
-      if (sameRange(prev, fixed)) return prev;
-      return fixed;
-    });
-  }, [calendarConfig]);
-
   // ── setter público usado por las vistas ────────────────────────────────────
 
   const setDateRangeUser = useCallback(
     (newRange) => {
-      /**
-       * Si es modo dias_atras, no dejo que una vista pise el rango global.
-       * Esto evita definitivamente casos como:
-       * 06/09/2025 → 27/04/2026.
-       */
-      if (calendarConfig?.modo === "dias_atras") {
-        userTouchedRange.current = false;
-        setDateRangeState(buildRangeFromConfig(calendarConfig));
-        return;
-      }
-
       userTouchedRange.current = true;
       setSafeDateRange(newRange);
     },
-    [calendarConfig, setSafeDateRange]
+    [setSafeDateRange]
   );
 
   // ── cuando se guarda una nueva config desde el panel ──────────────────────

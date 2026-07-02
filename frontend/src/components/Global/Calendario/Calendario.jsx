@@ -2,7 +2,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowRightLong } from "@fortawesome/free-solid-svg-icons";
-import { useDateRange } from "../../../context/DateRangeContext";
 import "./calendario.css";
 import "../Global_css/Global_oscuro.css";
 
@@ -126,7 +125,7 @@ function clampViewDate(viewDate, maxDate) {
      value:    { from: Date|null, to: Date|null }
      onChange: ({ from, to }) => void
      minDate?: Date
-     maxDate?: Date   ← opcional; si no viene, se toma del contexto
+     maxDate?: Date   ← opcional; si viene, limita la fecha máxima
      onClose?: () => void
 ============================================= */
 export default function Calendario({
@@ -136,16 +135,9 @@ export default function Calendario({
   maxDate: maxDateProp,
   onClose,
 }) {
-  const { maxDate: contextMaxDate, calendarConfig } = useDateRange();
-
-  // Prioridad:
-  // 1) maxDate pasado por prop
-  // 2) maxDate del contexto cuando el modo es "dias_atras"
-  const effectiveMaxDate = useMemo(() => {
-    if (maxDateProp) return maxDateProp;
-    if (calendarConfig?.modo === "dias_atras" && contextMaxDate) return contextMaxDate;
-    return null;
-  }, [maxDateProp, contextMaxDate, calendarConfig?.modo]);
+  // El límite máximo solo se aplica si una vista lo pasa explícitamente.
+  // La configuración global es solo el rango inicial, no una restricción manual.
+  const effectiveMaxDate = useMemo(() => maxDateProp || null, [maxDateProp]);
 
   const today = startOfDay(new Date());
 

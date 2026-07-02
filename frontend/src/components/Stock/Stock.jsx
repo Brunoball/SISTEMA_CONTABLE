@@ -1047,7 +1047,7 @@ const Stock = () => {
             ))}
           </div>
 
-          <div className="mov-tableWrap" role="rowgroup">
+          <div className="mov-tableWrap" role="rowgroup" id="mov-tableWrap--stock">
             <div
               className={[
                 "mov-gridBody",
@@ -1218,33 +1218,38 @@ const Stock = () => {
         </section>
 
         {totalPaginas > 1 && (
-          <div className="prod-pagination">
+          <nav className="prod-pagination" aria-label="Paginación de productos">
             <button
               type="button"
-              className="mov-btn mov-btn--ghost"
+              className="prod-pageBtn prod-pageBtn--nav"
               onClick={() => setPaginaActual((p) => Math.max(1, p - 1))}
               disabled={paginaActual === 1}
+              aria-label="Ir a la página anterior"
             >
-              ← Anterior
+              <span className="prod-pageBtn__arrow" aria-hidden="true">‹</span>
+              <span className="prod-pageBtn__text">Anterior</span>
             </button>
 
-            {paginasVisibles.map((p, i) =>
-              p === "..." ? (
-                <span key={`dots-${i}`} className="prod-page-dots">
-                  …
-                </span>
-              ) : (
-                <button
-                  key={p}
-                  type="button"
-                  className={`mov-btn ${p === paginaActual ? "mov-btn--primary" : "mov-btn--ghost"}`}
-                  onClick={() => setPaginaActual(p)}
-                  style={{ minWidth: 40, padding: "0 10px" }}
-                >
-                  {p}
-                </button>
-              )
-            )}
+            <div className="prod-pagination__pages" aria-label="Páginas disponibles">
+              {paginasVisibles.map((p, i) =>
+                p === "..." ? (
+                  <span key={`dots-${i}`} className="prod-page-dots" aria-hidden="true">
+                    …
+                  </span>
+                ) : (
+                  <button
+                    key={p}
+                    type="button"
+                    className={`prod-pageBtn prod-pageBtn--number ${p === paginaActual ? "is-active" : ""}`}
+                    onClick={() => setPaginaActual(p)}
+                    aria-label={`Ir a la página ${p}`}
+                    aria-current={p === paginaActual ? "page" : undefined}
+                  >
+                    {p}
+                  </button>
+                )
+              )}
+            </div>
 
             <span className="prod-pagination__summary">
               Página {paginaActual} de {totalPaginas}
@@ -1252,13 +1257,15 @@ const Stock = () => {
 
             <button
               type="button"
-              className="mov-btn mov-btn--ghost"
+              className="prod-pageBtn prod-pageBtn--nav"
               onClick={() => setPaginaActual((p) => Math.min(totalPaginas, p + 1))}
               disabled={paginaActual === totalPaginas}
+              aria-label="Ir a la página siguiente"
             >
-              Siguiente →
+              <span className="prod-pageBtn__text">Siguiente</span>
+              <span className="prod-pageBtn__arrow" aria-hidden="true">›</span>
             </button>
-          </div>
+          </nav>
         )}
       </div>
 

@@ -2106,3 +2106,8 @@ body.dark .mov-page .flujo-badge.mov-chip--danger {
     min-width: 100%;
   }
 }
+#mov-tableWrap--stock{
+  min-height: calc(100vh - 280px) !important;
+  max-height: calc(100vh - 280px) !important;
+}
+

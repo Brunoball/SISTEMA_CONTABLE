@@ -36,7 +36,7 @@
 /* Cabecera */
 .mpr-thead {
   display: grid;
-  grid-template-columns: 44px 100px 1fr 110px 130px 54px;
+  grid-template-columns: 44px 100px 1fr 130px 130px 54px;
   align-items: center;
   background: var(--nv-head-bg);
   min-height: 38px;
@@ -73,7 +73,7 @@
 /* Filas */
 .mpr-row {
   display: grid;
-  grid-template-columns: 44px 100px 1fr 110px 130px 54px;
+  grid-template-columns: 44px 100px 1fr 130px 130px 54px;
   align-items: center;
   min-height: 42px;
   border-bottom: 1px solid var(--nv-border);

@@ -619,6 +619,18 @@ html[data-theme="oscuro"] .scat-prodCount { color: rgba(226, 232, 240, 0.75) !im
   font-weight: 500;
 }
 
+.prod-pagination__summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mov-muted);
+  white-space: nowrap;
+}
+
 /* ── Dark mode: thumbnail ── */
 html[data-theme="oscuro"] .prod-thumb {
   background: rgba(15,23,42,.88) !important;

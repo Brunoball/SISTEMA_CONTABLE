@@ -613,6 +613,13 @@ const Stock = () => {
     return productosFiltradosYOrdenados.slice(inicio, inicio + productosPorPagina);
   }, [productosFiltradosYOrdenados, paginaActual]);
 
+  const inicioProductosVisibles = totalProductos > 0
+    ? (paginaActual - 1) * productosPorPagina + 1
+    : 0;
+  const finProductosVisibles = totalProductos > 0
+    ? Math.min(inicioProductosVisibles + productos.length - 1, totalProductos)
+    : 0;
+
   const handleBusqueda = (e) => {
     setBusqueda(e.target.value);
     setPaginaActual(1);
@@ -937,7 +944,14 @@ const Stock = () => {
               <div className="title-mov">
                 <div className="mov-card__title">Stock · Productos</div>
                 <div className="mov-card__hint">
-                  Mostrando <b>{totalProductos}</b> productos
+                  {totalProductos > 0 ? (
+                    <>
+                      Mostrando <b>{inicioProductosVisibles}</b>–<b>{finProductosVisibles}</b> de{" "}
+                      <b>{totalProductos}</b> productos
+                    </>
+                  ) : (
+                    <>Sin productos para mostrar</>
+                  )}
                 </div>
               </div>
 
@@ -1231,6 +1245,10 @@ const Stock = () => {
                 </button>
               )
             )}
+
+            <span className="prod-pagination__summary">
+              Página {paginaActual} de {totalPaginas}
+            </span>
 
             <button
               type="button"
